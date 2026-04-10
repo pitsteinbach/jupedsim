@@ -6,7 +6,7 @@
 
 # Python specific ignores
 __pycache__/
-
+venv/
 # example results
 *.sqlite
 
