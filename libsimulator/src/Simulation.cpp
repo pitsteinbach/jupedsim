@@ -62,7 +62,7 @@ void Simulation::SetTracing(bool status)
     _perfStats.SetEnabled(status);
 };
 
-PerfStats Simulation::GetLastStats() const
+const PerfStats& Simulation::GetLastStats() const
 {
     return _perfStats;
 };
@@ -71,17 +71,29 @@ void Simulation::Iterate()
 {
     // LOG_DEBUG("Iteration {} / Time {}s", _clock.Iteration(), _clock.ElapsedTime());
     auto t = _perfStats.TraceIterate();
+    _perfStats.PushProfilerProbe("AgentRemovalSystem");
     _agentRemovalSystem.Run(_agents, _removedAgentsInLastIteration, _stageManager);
+    _perfStats.PopProfilerProbe("AgentRemovalSystem");
+    _perfStats.PushProfilerProbe("NeighborhoodSearch");
     _neighborhoodSearch.Update(_agents);
+    _perfStats.PopProfilerProbe("NeighborhoodSearch");
 
+    _perfStats.PushProfilerProbe("StageSystem");
     _stageSystem.Run(_stageManager, _neighborhoodSearch, *_geometry);
+    _perfStats.PopProfilerProbe("StageSystem");
+    _perfStats.PushProfilerProbe("StategicalDecisionSystem");
     _stategicalDecisionSystem.Run(_journeys, _agents, _stageManager);
+    _perfStats.PopProfilerProbe("StategicalDecisionSystem");
+    _perfStats.PushProfilerProbe("TacticalDecisionSystem");
     _tacticalDecisionSystem.Run(*_routingEngine, _agents);
+    _perfStats.PopProfilerProbe("TacticalDecisionSystem");
+    _perfStats.PushProfilerProbe("OperationalDecisionSystem");
     {
         auto t2 = _perfStats.TraceOperationalDecisionSystemRun();
         _operationalDecisionSystem.Run(
             _clock.dT(), _clock.ElapsedTime(), _neighborhoodSearch, *_geometry, _agents);
     }
+    _perfStats.PopProfilerProbe("OperationalDecisionSystem");
     _clock.Advance();
 }
 

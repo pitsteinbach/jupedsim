@@ -4,6 +4,11 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#ifdef BUILD_PROFILER
+    #include <map>
+    #include "ProfilerLib/Profiler.hpp"
+    #include "ProfilerLib/DurationEvent.hpp"
+#endif
 
 class Trace
 {
@@ -21,6 +26,7 @@ public:
     Trace& operator=(const Trace& other) = delete;
     Trace(Trace&& other) = delete;
     Trace& operator=(const Trace&& other) = delete;
+
 };
 
 class PerfStats
@@ -28,13 +34,24 @@ class PerfStats
     uint64_t iterate_duration{};
     uint64_t op_dec_system_run_duration{};
     bool enabled{false};
+#ifdef BUILD_PROFILER
+    std::string prof_filename{"jps_simulator.json"};
+    Profiler profiler{"JPS Simulator", prof_filename};
+    std::map<std::string, std::unique_ptr<DurationEvent>> event_map{};
+#endif
 
 public:
     std::optional<Trace> TraceIterate();
     std::optional<Trace> TraceOperationalDecisionSystemRun();
+    void PushProfilerProbe(const std::string& name);
+    void PopProfilerProbe(const std::string& name);
     void SetEnabled(bool status) { enabled = status; };
     uint64_t IterationDuration() const { return iterate_duration; };
     uint64_t OpDecSystemRunDuration() const { return op_dec_system_run_duration; };
+    
+#ifdef BUILD_PROFILER
+    void SetProfilerFilename(const std::string& filename) { prof_filename = filename; };
+#endif
 
 private:
     std::optional<Trace> trace(uint64_t& v);

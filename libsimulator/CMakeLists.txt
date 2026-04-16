@@ -1,7 +1,7 @@
 ################################################################################
 # Build libsimulator
 ################################################################################
-
+add_compile_definitions(BUILD_PROFILER)
 # The simulator target is created in the src/ subdirectory. This keeps the
 # large explicit source list closer to the files and improves maintainability.
 add_subdirectory(src)
@@ -33,6 +33,11 @@ target_include_directories(simulator PUBLIC
 )
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION ${USE_IPO})
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
+
+if (BUILD_PROFILER)
+    target_link_libraries(simulator PRIVATE profilerLib)
+    add_compile_definitions(BUILD_PROFILER)
+endif()
 
 ################################################################################
 # libsimulator unit tests
@@ -92,3 +97,4 @@ if (BUILD_BENCHMARKS)
     set_property(TARGET libsimulator-benchmarks PROPERTY INTERPROCEDURAL_OPTIMIZATION ${USE_IPO})
     set_property(TARGET libsimulator-benchmarks PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
 endif ()
+
