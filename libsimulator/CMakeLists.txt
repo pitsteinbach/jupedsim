@@ -1,92 +1,10 @@
 ################################################################################
 # Build libsimulator
 ################################################################################
-add_library(simulator STATIC
-    src/AABB.cpp
-    src/AABB.hpp
-    src/AgentRemovalSystem.hpp
-    src/Clonable.hpp
-    src/CollisionFreeSpeedModel.cpp
-    src/CollisionFreeSpeedModel.hpp
-    src/CollisionFreeSpeedModelBuilder.cpp
-    src/CollisionFreeSpeedModelBuilder.hpp
-    src/CollisionFreeSpeedModelData.hpp
-    src/CollisionFreeSpeedModelUpdate.hpp
-     src/CollisionFreeSpeedModelV2.cpp
-    src/CollisionFreeSpeedModelV2.hpp
-    src/CollisionFreeSpeedModelV2Builder.cpp
-    src/CollisionFreeSpeedModelV2Builder.hpp
-    src/CollisionFreeSpeedModelV2Data.hpp
-    src/CollisionFreeSpeedModelV2Update.hpp
-    src/AnticipationVelocityModel.cpp
-    src/AnticipationVelocityModel.hpp
-    src/AnticipationVelocityModelBuilder.cpp
-    src/AnticipationVelocityModelBuilder.hpp
-    src/AnticipationVelocityModelData.hpp
-    src/AnticipationVelocityModelUpdate.hpp  
-    src/CollisionGeometry.cpp
-    src/CollisionGeometry.hpp
-    src/Ellipse.cpp
-    src/Ellipse.hpp
-    src/GeneralizedCentrifugalForceModel.cpp
-    src/GeneralizedCentrifugalForceModel.hpp
-    src/GeneralizedCentrifugalForceModelBuilder.cpp
-    src/GeneralizedCentrifugalForceModelBuilder.hpp
-    src/GeneralizedCentrifugalForceModelData.hpp
-    src/GeneralizedCentrifugalForceModelUpdate.hpp
-    src/GenericAgent.hpp
-    src/GeometricFunctions.hpp
-    src/GeometryBuilder.cpp
-    src/GeometryBuilder.hpp
-    src/GeometrySwitchError.hpp
-    src/Graph.hpp
-    src/Journey.cpp
-    src/Journey.hpp
-    src/LineSegment.cpp
-    src/LineSegment.hpp
-    src/Logger.cpp
-    src/Logger.hpp
-    src/Macros.hpp
-    src/Mathematics.cpp
-    src/Mathematics.hpp
-    src/Mesh.cpp
-    src/Mesh.hpp
-    src/NeighborhoodSearch.hpp
-    src/OperationalDecisionSystem.hpp
-    src/OperationalModel.hpp
-    src/OperationalModelUpdate.hpp
-    src/Point.cpp
-    src/Point.hpp
-    src/Polygon.cpp
-    src/Polygon.hpp
-    src/RoutingEngine.cpp
-    src/RoutingEngine.hpp
-    src/Simulation.cpp
-    src/Simulation.hpp
-    src/SimulationClock.cpp
-    src/SimulationClock.hpp
-    src/SimulationError.hpp
-    src/SocialForceModel.cpp
-    src/SocialForceModel.hpp
-    src/SocialForceModelBuilder.cpp
-    src/SocialForceModelBuilder.hpp
-    src/SocialForceModelData.hpp
-    src/SocialForceModelUpdate.hpp
-    src/Stage.cpp
-    src/Stage.hpp
-    src/StageDescription.hpp
-    src/StageManager.cpp
-    src/StageManager.hpp
-    src/StageSystem.cpp
-    src/StageSystem.hpp
-    src/StrategicalDesicionSystem.hpp
-    src/TacticalDecisionSystem.hpp
-    src/TemplateHelper.hpp
-    src/Tracing.cpp
-    src/Tracing.hpp
-    src/UniqueID.hpp
-    src/Util.hpp
-)
+
+# The simulator target is created in the src/ subdirectory. This keeps the
+# large explicit source list closer to the files and improves maintainability.
+add_subdirectory(src)
 target_compile_options(simulator PRIVATE
     ${COMMON_COMPILE_OPTIONS}
 )
@@ -106,6 +24,12 @@ target_link_options(simulator PUBLIC
 )
 target_include_directories(simulator PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/OperationalModels
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/OperationalModels/AnticipationVelocityModel
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/OperationalModels/CollisionFreeSpeedModel
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/OperationalModels/CollisionFreeSpeedModelV2
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/OperationalModels/GeneralizedCentrifugalForceModel
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/OperationalModels/SocialForceModel
 )
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION ${USE_IPO})
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
