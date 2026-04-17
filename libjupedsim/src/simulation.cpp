@@ -670,8 +670,8 @@ JPS_Trace JPS_Simulation_GetTrace(JPS_Simulation handle)
 {
     assert(handle);
     auto simuation = reinterpret_cast<Simulation*>(handle);
-    const auto stats = simuation->GetLastStats();
-    return JPS_Trace{stats.IterationDuration(), stats.OpDecSystemRunDuration()};
+    //const auto stats = simuation->GetLastStats();
+    return JPS_Trace{0, 0}; // Placeholder values, replace with actual stats
 }
 
 JPS_Geometry JPS_Simulation_GetGeometry(JPS_Simulation handle)

@@ -46,6 +46,11 @@ target_link_libraries(jupedsim_obj
 set_property(TARGET jupedsim_obj PROPERTY INTERPROCEDURAL_OPTIMIZATION ${USE_IPO})
 set_property(TARGET jupedsim_obj PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
 
+if (BUILD_PROFILER)
+    add_compile_definitions(BUILD_PROFILER)
+    target_link_libraries(jupedsim_obj PRIVATE profilerLib)
+endif()
+
 ################################################################################
 # libjupedsim unit tests
 ################################################################################
@@ -94,6 +99,12 @@ target_link_libraries(jupedsim
 )
 set_property(TARGET jupedsim PROPERTY INTERPROCEDURAL_OPTIMIZATION ${USE_IPO})
 set_property(TARGET jupedsim PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
+
+if (BUILD_PROFILER)
+    add_compile_definitions(BUILD_PROFILER)
+    target_link_libraries(jupedsim PRIVATE profilerLib)
+endif()
+
 
 ################################################################################
 # Installation

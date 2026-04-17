@@ -30,6 +30,22 @@ target_link_libraries(py_jupedsim
         common
 )
 
+if (BUILD_PROFILER)
+    # Ensure profiler symbols are available when profiler support is enabled
+    target_link_libraries(py_jupedsim
+        PRIVATE
+            profilerLib
+    )
+endif()
+
+# The python module uses objects that live in the simulator target. Link
+# against the simulator library so the module's flat namespace contains
+# the symbols (especially on macOS where dynamic loading relies on it).
+target_link_libraries(py_jupedsim
+    PRIVATE
+        simulator
+)
+
 pybind11_extension(py_jupedsim)
 
 if(NOT MSVC AND NOT ${CMAKE_BUILD_TYPE} MATCHES Debug|RelWithDebInfo)

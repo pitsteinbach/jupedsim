@@ -77,3 +77,14 @@ endif ()
 ################################################################################
 set(GLM_ENABLE_CXX_20 ON CACHE BOOL "" FORCE)
 add_subdirectory(glm-1.0.1)
+
+################################################################################
+# Chrome Trace Event Format Profiler
+################################################################################
+
+if (BUILD_PROFILER)
+    message(STATUS "Building with profiler support")
+    add_subdirectory(Profiler)
+    add_compile_definitions(BUILD_PROFILER)
+    #target_link_libraries(myProgram PRIVATE profilerLib)
+endif()

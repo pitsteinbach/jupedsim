@@ -57,7 +57,7 @@ public:
     ~Simulation() = default;
     const SimulationClock& Clock() const;
     void SetTracing(bool on);
-    PerfStats GetLastStats() const;
+    const PerfStats& GetLastStats() const;
     void Iterate();
     Journey::ID AddJourney(const std::map<BaseStage::ID, TransitionDescription>& stages);
     BaseStage::ID AddStage(const StageDescription stageDescription);
