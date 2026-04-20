@@ -126,9 +126,13 @@ void init_simulation(py::module_& m)
             })
         .def("get_stage_proxy", [](Simulation& sim, uint64_t id) { return sim.Stage(id); })
         .def("set_tracing", [](Simulation& sim, bool status) { sim.SetTracing(status); })
-        .def("get_last_trace", [](Simulation& sim) { return sim.GetLastStats(); })
+        .def("get_last_trace", [](Simulation& sim) -> const PerfStats& { return sim.GetLastStats(); }, py::return_value_policy::reference_internal)
         .def("get_geometry", [](Simulation& sim) { return sim.Geo(); })
+        .def("print_timer", [](Simulation& sim) { sim.GetLastStats().PrintTimerEntries(); })
+        .def("push_timer", [](Simulation& sim, const std::string& name) { sim.PushTimer(name); })
+        .def("pop_timer", [](Simulation& sim, const std::string& name) { sim.PopTimer(name); })
         .def("switch_geometry", [](Simulation& sim, CollisionGeometry& geometry) {
             sim.SwitchGeometry(std::make_unique<CollisionGeometry>(geometry));
         });
+        
 }

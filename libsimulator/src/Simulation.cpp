@@ -59,34 +59,53 @@ const SimulationClock& Simulation::Clock() const
 
 void Simulation::SetTracing(bool status)
 {
-    _perfStats.SetEnabled(status);
+    _perfStats.EnableProfiler(status);
 };
 
-PerfStats Simulation::GetLastStats() const
+const PerfStats& Simulation::GetLastStats() const
 {
-    return _perfStats;
+    return std::move(_perfStats);
 };
 
 void Simulation::Iterate()
 {
     // LOG_DEBUG("Iteration {} / Time {}s", _clock.Iteration(), _clock.ElapsedTime());
-    auto t = _perfStats.TraceIterate();
+    _perfStats.PushTimerProbe("Total Iteration");
+    
+    _perfStats.PushTimerProbe("Agent Removal System");
     _agentRemovalSystem.Run(_agents, _removedAgentsInLastIteration, _stageManager);
-    _neighborhoodSearch.Update(_agents);
+    _perfStats.PopTimerProbe("Agent Removal System");
 
+    _perfStats.PushTimerProbe("Neighborhood Search");
+    _neighborhoodSearch.Update(_agents);
+    _perfStats.PopTimerProbe("Neighborhood Search");
+
+    _perfStats.PushTimerProbe("Stage System");
     _stageSystem.Run(_stageManager, _neighborhoodSearch, *_geometry);
+    _perfStats.PopTimerProbe("Stage System");
+
+    _perfStats.PushTimerProbe("Stategical Decision System");
     _stategicalDecisionSystem.Run(_journeys, _agents, _stageManager);
+    _perfStats.PopTimerProbe("Stategical Decision System");
+
+    _perfStats.PushTimerProbe("Tactical Decision System");
     _tacticalDecisionSystem.Run(*_routingEngine, _agents);
+    _perfStats.PopTimerProbe("Tactical Decision System");
+
+    _perfStats.PushTimerProbe("Operational Decision System");
     {
-        auto t2 = _perfStats.TraceOperationalDecisionSystemRun();
         _operationalDecisionSystem.Run(
             _clock.dT(), _clock.ElapsedTime(), _neighborhoodSearch, *_geometry, _agents);
     }
+    _perfStats.PopTimerProbe("Operational Decision System");
+
+    _perfStats.PopTimerProbe("Total Iteration");
     _clock.Advance();
 }
 
 Journey::ID Simulation::AddJourney(const std::map<BaseStage::ID, TransitionDescription>& stages)
 {
+    _perfStats.PushTimerProbe("Add Journey");
     std::map<BaseStage::ID, JourneyNode> nodes;
     bool containsDirectSteering =
         std::find_if(std::begin(stages), std::end(stages), [this](auto const& pair) {
@@ -157,11 +176,13 @@ Journey::ID Simulation::AddJourney(const std::map<BaseStage::ID, TransitionDescr
     auto journey = std::make_unique<Journey>(std::move(nodes));
     const auto id = journey->Id();
     _journeys.emplace(id, std::move(journey));
+    _perfStats.PopTimerProbe("Add Journey");
     return id;
 }
 
 BaseStage::ID Simulation::AddStage(const StageDescription stageDescription)
 {
+    _perfStats.PushTimerProbe("Add Stage");
     std::visit(
         overloaded{
             [this](const WaypointDescription& d) -> void {
@@ -195,12 +216,13 @@ BaseStage::ID Simulation::AddStage(const StageDescription stageDescription)
             }},
         stageDescription);
 
+    _perfStats.PopTimerProbe("Add Stage");
     return _stageManager.AddStage(stageDescription, _removedAgentsInLastIteration);
 }
 
 GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
 {
-
+    _perfStats.PushTimerProbe("Add Agent");
     if(!_geometry->InsideGeometry(agent.pos)) {
         throw SimulationError("Agent {} not inside walkable area", agent.pos);
     }
@@ -228,6 +250,7 @@ GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
     auto v = IteratorPair(std::prev(std::end(_agents)), std::end(_agents));
     _stategicalDecisionSystem.Run(_journeys, v, _stageManager);
     _tacticalDecisionSystem.Run(*_routingEngine, v);
+    _perfStats.PopTimerProbe("Add Agent");
     return _agents.back().id.getID();
 }
 
@@ -441,4 +464,16 @@ void Simulation::ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geom
 
         throw GeometrySwitchError(message.c_str(), faultyAgents, faultyStages);
     }
+
+    
+}
+
+void Simulation::PushTimer(const std::string& name)
+{
+    _perfStats.PushTimerProbe(name);
+}
+
+void Simulation::PopTimer(const std::string& name)
+{
+    _perfStats.PopTimerProbe(name);
 }

@@ -61,7 +61,7 @@ public:
     ~Simulation() = default;
     const SimulationClock& Clock() const;
     void SetTracing(bool on);
-    PerfStats GetLastStats() const;
+    const PerfStats& GetLastStats() const;
     void Iterate();
     Journey::ID AddJourney(const std::map<BaseStage::ID, TransitionDescription>& stages);
     BaseStage::ID AddStage(const StageDescription stageDescription);
@@ -85,6 +85,8 @@ public:
     StageProxy Stage(BaseStage::ID stageId);
     CollisionGeometry Geo() const;
     void SwitchGeometry(std::unique_ptr<CollisionGeometry>&& geometry);
+    void PushTimer(const std::string& name);
+    void PopTimer(const std::string& name);
 
 private:
     void ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geometry) const;

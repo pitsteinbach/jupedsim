@@ -4,12 +4,14 @@
 
 #include <fmt/core.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 namespace py = pybind11;
 
 void init_trace(py::module_& m)
 {
     py::class_<PerfStats>(m, "Trace")
+
         .def_property_readonly(
             "iteration_duration", [](const PerfStats& ps) { return ps.IterationDuration(); })
         .def_property_readonly(
@@ -20,5 +22,8 @@ void init_trace(py::module_& m)
                 "Trace( Iteration: {:d}us, OperationalLevel {:d}us)",
                 ps.IterationDuration(),
                 ps.OpDecSystemRunDuration());
-        });
+        })
+        .def("print_timer_entries",[](const PerfStats& ps) { ps.PrintTimerEntries(); })
+        .def("get_timer_entries", [](const PerfStats& ps) { return ps.GetTimerEntries(); });
+        
 }

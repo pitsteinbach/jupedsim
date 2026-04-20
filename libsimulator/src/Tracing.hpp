@@ -5,37 +5,61 @@
 #include <cstdint>
 #include <optional>
 
+#include <map>
+#include "ProfilerLib/Profiler.hpp"
+#include "ProfilerLib/DurationEvent.hpp"
+
 class Trace
 {
     std::chrono::high_resolution_clock::time_point startedAt;
-    uint64_t& t;
+    uint64_t t;
+    bool running{false};
 
 public:
-    Trace(uint64_t& _t);
+    Trace();
     ~Trace()
     {
-        const auto now = std::chrono::high_resolution_clock::now();
-        t = std::chrono::duration_cast<std::chrono::microseconds>(now - startedAt).count();
     }
-    Trace(const Trace& other) = delete;
-    Trace& operator=(const Trace& other) = delete;
-    Trace(Trace&& other) = delete;
-    Trace& operator=(const Trace&& other) = delete;
+    Trace(const Trace& other);
+    Trace& operator=(const Trace& other);
+    Trace(Trace&& other) noexcept;  
+    Trace& operator=(Trace&& other) noexcept;
+    void start();
+    void stop();
+    uint64_t getDuration() const;
 };
 
 class PerfStats
 {
-    uint64_t iterate_duration{};
-    uint64_t op_dec_system_run_duration{};
-    bool enabled{false};
+    mutable uint64_t last_iteration_duration{0};
+    mutable uint64_t last_operational_duration{0};
+    bool enable_tracing{false};
+    std::string prof_filename{"jps_simulator.json"};
+
+    std::shared_ptr<Profiler> profiler{};
+    std::map<std::string, std::shared_ptr<DurationEvent>> event_map{};
+    std::map<std::string, Trace> timer_map{};
 
 public:
     std::optional<Trace> TraceIterate();
     std::optional<Trace> TraceOperationalDecisionSystemRun();
-    void SetEnabled(bool status) { enabled = status; };
-    uint64_t IterationDuration() const { return iterate_duration; };
-    uint64_t OpDecSystemRunDuration() const { return op_dec_system_run_duration; };
+    void PushTimerProbe(const std::string& name);
+    void PopTimerProbe(const std::string& name);
+    void EnableProfiler(bool status) { enable_tracing = status; };
+    uint64_t IterationDuration() const;
+    uint64_t OpDecSystemRunDuration() const;
+    void SetProfilerFilename(const std::string& filename) { prof_filename = filename; };
+    void PrintTimerEntries() const;
+    std::map<std::string, uint64_t> GetTimerEntries() const
+    {
+        std::map<std::string, uint64_t> entries;
+        for (const auto& [name, trace] : timer_map) {
+            entries[name] = trace.getDuration();
+        }
+        return entries;
+    }
 
 private:
-    std::optional<Trace> trace(uint64_t& v);
+    void PushProfilerProbe(const std::string& name);
+    void PopProfilerProbe(const std::string& name);
 };

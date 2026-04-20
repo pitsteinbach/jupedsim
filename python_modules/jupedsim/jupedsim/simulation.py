@@ -142,6 +142,11 @@ class Simulation:
         self._obj = py_jps.Simulation(
             model=py_jps_model, geometry=build_geometry(geometry)._obj, dt=dt
         )
+        self.push_timer("Total Simulation Time")
+
+    def __del__(self):
+        """Destructor for Simulation. Prints the timer output to the console."""
+        self.print_timer()
 
     def add_waypoint_stage(
         self, position: tuple[float, float], distance
@@ -554,3 +559,41 @@ class Simulation:
         """
         internal_geometry = build_geometry(geometry)
         self._obj.switch_geometry(internal_geometry._obj)
+    
+    def print_timer(self) -> None:
+        """Prints the timer entries to the console. By default only the main iteration loop is timed."""
+        self.pop_timer("Total Simulation Time")
+        timer_dict = self._obj.get_last_trace().get_timer_entries()
+        if (timer_dict.get("Total Simulation Time") != None):
+            ref = timer_dict["Total Simulation Time"]
+            timer_dict.pop("Total Simulation Time")
+        else:
+            ref = timer_dict.get("TotalIteration")
+            timer_dict.pop("TotalIteration")
+        
+        print("")
+        print("JuPedSim Timings:")
+        print("-----------------------------------------------------")
+        for name, duration in timer_dict.items():
+            if duration/ref*100 < 0.005:
+                continue
+            tabs = ""
+            if len(name) < 12:
+                tabs = "\t\t\t"
+            elif len(name) < 20:
+                tabs = "\t\t"
+            else:
+                tabs = "\t"
+            print(f"{name}: {tabs} {duration/1000000:8.2f} s ({duration/ref*100:5.2f}%)")
+   
+        print("-----------------------------------------------------")
+        print(f"Total Simulation Time: \t\t {ref/1000000:8.2f} s")
+        print("")
+
+    def push_timer(self, name: str) -> None:
+        """Pushes a timer probe with the given name. The time between push and pop will be recorded and printed in the timer output."""
+        self._obj.push_timer(name)
+
+    def pop_timer(self, name: str) -> None:
+        """Pops a timer probe with the given name. The time between push and pop will be recorded and printed in the timer output."""
+        self._obj.pop_timer(name)
