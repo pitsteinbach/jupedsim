@@ -17,13 +17,14 @@ void init_trace(py::module_& m)
         .def_property_readonly(
             "operational_level_duration",
             [](const PerfStats& ps) { return ps.OpDecSystemRunDuration(); })
-        .def("__repr__", [](const PerfStats& ps) {
-            return fmt::format(
-                "Trace( Iteration: {:d}us, OperationalLevel {:d}us)",
-                ps.IterationDuration(),
-                ps.OpDecSystemRunDuration());
-        })
-        .def("print_timer_entries",[](const PerfStats& ps) { ps.PrintTimerEntries(); })
+        .def(
+            "__repr__",
+            [](const PerfStats& ps) {
+                return fmt::format(
+                    "Trace( Iteration: {:d}us, OperationalLevel {:d}us)",
+                    ps.IterationDuration(),
+                    ps.OpDecSystemRunDuration());
+            })
+        .def("print_timer_entries", [](const PerfStats& ps) { ps.PrintTimerEntries(); })
         .def("get_timer_entries", [](const PerfStats& ps) { return ps.GetTimerEntries(); });
-        
 }

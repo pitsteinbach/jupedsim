@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
+#include "ProfilerLib/DurationEvent.hpp"
+#include "ProfilerLib/Profiler.hpp"
+
 #include <chrono>
 #include <cstdint>
-#include <optional>
-
 #include <map>
-#include "ProfilerLib/Profiler.hpp"
-#include "ProfilerLib/DurationEvent.hpp"
+#include <optional>
 
 class Trace
 {
@@ -17,12 +17,10 @@ class Trace
 
 public:
     Trace();
-    ~Trace()
-    {
-    }
+    ~Trace() {}
     Trace(const Trace& other);
     Trace& operator=(const Trace& other);
-    Trace(Trace&& other) noexcept;  
+    Trace(Trace&& other) noexcept;
     Trace& operator=(Trace&& other) noexcept;
     void start();
     void stop();
@@ -53,7 +51,7 @@ public:
     std::map<std::string, uint64_t> GetTimerEntries() const
     {
         std::map<std::string, uint64_t> entries;
-        for (const auto& [name, trace] : timer_map) {
+        for(const auto& [name, trace] : timer_map) {
             entries[name] = trace.getDuration();
         }
         return entries;

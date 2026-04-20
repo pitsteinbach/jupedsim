@@ -71,7 +71,7 @@ void Simulation::Iterate()
 {
     // LOG_DEBUG("Iteration {} / Time {}s", _clock.Iteration(), _clock.ElapsedTime());
     _perfStats.PushTimerProbe("Total Iteration");
-    
+
     _perfStats.PushTimerProbe("Agent Removal System");
     _agentRemovalSystem.Run(_agents, _removedAgentsInLastIteration, _stageManager);
     _perfStats.PopTimerProbe("Agent Removal System");
@@ -437,8 +437,9 @@ void Simulation::ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geom
                         faultyStages.push_back(stageId);
                     }
                 }
-            } else if(auto waitingset = dynamic_cast<NotifiableWaitingSet*>(node.stage);
-                      waitingset != nullptr) {
+            } else if(
+                auto waitingset = dynamic_cast<NotifiableWaitingSet*>(node.stage);
+                waitingset != nullptr) {
                 for(const auto& point : waitingset->Slots()) {
                     if(!geometry->InsideGeometry(point)) {
                         faultyStages.push_back(stageId);
@@ -464,8 +465,6 @@ void Simulation::ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geom
 
         throw GeometrySwitchError(message.c_str(), faultyAgents, faultyStages);
     }
-
-    
 }
 
 void Simulation::PushTimer(const std::string& name)
