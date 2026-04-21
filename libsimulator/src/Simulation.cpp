@@ -438,7 +438,7 @@ void Simulation::ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geom
                     }
                 }
             } else if(auto waitingset = dynamic_cast<NotifiableWaitingSet*>(node.stage);
-                waitingset != nullptr) {
+                      waitingset != nullptr) {
                 for(const auto& point : waitingset->Slots()) {
                     if(!geometry->InsideGeometry(point)) {
                         faultyStages.push_back(stageId);

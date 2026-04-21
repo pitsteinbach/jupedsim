@@ -73,16 +73,6 @@ uint64_t Trace::getDuration() const
     return t;
 }
 
-std::optional<Trace> PerfStats::TraceIterate()
-{
-    return std::nullopt;
-}
-
-std::optional<Trace> PerfStats::TraceOperationalDecisionSystemRun()
-{
-    return std::nullopt;
-}
-
 #ifdef BUILD_PROFILER
 void PerfStats::PushProfilerProbe(const std::string& name)
 {

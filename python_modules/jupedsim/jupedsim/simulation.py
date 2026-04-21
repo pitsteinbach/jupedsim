@@ -139,6 +139,7 @@ class Simulation:
         else:
             raise Exception("Unknown model type supplied")
         self._writer = trajectory_writer
+        self._enable_timer_printout = False
         self._obj = py_jps.Simulation(
             model=py_jps_model, geometry=build_geometry(geometry)._obj, dt=dt
         )
@@ -146,7 +147,8 @@ class Simulation:
 
     def __del__(self):
         """Destructor for Simulation. Prints the timer output to the console."""
-        self.print_timer()
+        if self._enable_timer_printout:
+            self.print_timer()
 
     def add_waypoint_stage(
         self, position: tuple[float, float], distance
@@ -593,6 +595,10 @@ class Simulation:
     def push_timer(self, name: str) -> None:
         """Pushes a timer probe with the given name. The time between push and pop will be recorded and printed in the timer output."""
         self._obj.push_timer(name)
+    
+    def enable_timer(self) -> None:
+        """Enable the timer printout"""
+        self._enable_timer_printout = True
 
     def pop_timer(self, name: str) -> None:
         """Pops a timer probe with the given name. The time between push and pop will be recorded and printed in the timer output."""

@@ -12,7 +12,7 @@ add_library(simulator STATIC
     src/CollisionFreeSpeedModelBuilder.hpp
     src/CollisionFreeSpeedModelData.hpp
     src/CollisionFreeSpeedModelUpdate.hpp
-     src/CollisionFreeSpeedModelV2.cpp
+    src/CollisionFreeSpeedModelV2.cpp
     src/CollisionFreeSpeedModelV2.hpp
     src/CollisionFreeSpeedModelV2Builder.cpp
     src/CollisionFreeSpeedModelV2Builder.hpp
@@ -110,9 +110,9 @@ target_include_directories(simulator PUBLIC
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION ${USE_IPO})
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
 
-if (BUILD_PROFILER)
+if (UNIX)
     target_link_libraries(simulator PUBLIC profilerLib)
-    add_compile_definitions(BUILD_PROFILER)
+    target_compile_definitions(simulator PUBLIC BUILD_PROFILER)
 endif()
 
 ################################################################################

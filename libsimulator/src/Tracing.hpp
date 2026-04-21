@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
+#ifdef BUILD_PROFILER
 #include "ProfilerLib/DurationEvent.hpp"
 #include "ProfilerLib/Profiler.hpp"
+#endif
 
 #include <chrono>
 #include <cstdint>
@@ -32,10 +34,12 @@ class PerfStats
     mutable uint64_t last_iteration_duration{0};
     mutable uint64_t last_operational_duration{0};
     bool enable_tracing{false};
+#ifdef BUILD_PROFILER    
     std::string prof_filename{"jps_simulator.json"};
-
     std::shared_ptr<Profiler> profiler{};
     std::map<std::string, std::shared_ptr<DurationEvent>> event_map{};
+#endif
+
     std::map<std::string, Trace> timer_map{};
 
 public:
