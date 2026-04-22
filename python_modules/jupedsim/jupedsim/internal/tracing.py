@@ -21,7 +21,7 @@ class Trace:
         # even if the timer has been stopped this should not change things
         self._timer.pop_timer("Total Simulation Time")
         timer_dict = self._timer.get_timer_entries()
-        if (timer_dict.get("Total Simulation Time") != None):
+        if (timer_dict.get("Total Simulation Time") is not None):
             ref = timer_dict["Total Simulation Time"]
             timer_dict.pop("Total Simulation Time")
         else:
