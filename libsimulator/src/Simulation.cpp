@@ -70,20 +70,16 @@ const PerfStats& Simulation::GetLastStats() const
 void Simulation::Iterate()
 {
     // LOG_DEBUG("Iteration {} / Time {}s", _clock.Iteration(), _clock.ElapsedTime());
-    
+
     _perfStats.PushTimerProbe("Total Iteration", _loglevel_general);
-    
 
     _perfStats.PushTimerProbe("Agent Removal System", _loglevel_detailed);
     _agentRemovalSystem.Run(_agents, _removedAgentsInLastIteration, _stageManager);
     _perfStats.PopTimerProbe("Agent Removal System");
-    
-
 
     _perfStats.PushTimerProbe("Neighborhood Search", _loglevel_detailed);
     _neighborhoodSearch.Update(_agents);
     _perfStats.PopTimerProbe("Neighborhood Search");
-
 
     _perfStats.PushTimerProbe("Stage System", _loglevel_detailed);
     _stageSystem.Run(_stageManager, _neighborhoodSearch, *_geometry);
@@ -103,7 +99,7 @@ void Simulation::Iterate()
             _clock.dT(), _clock.ElapsedTime(), _neighborhoodSearch, *_geometry, _agents);
     }
     _perfStats.PopTimerProbe("Operational Decision System");
-    
+
     _perfStats.PopTimerProbe("Total Iteration");
     _clock.Advance();
 }
@@ -448,8 +444,9 @@ void Simulation::ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geom
                         faultyStages.push_back(stageId);
                     }
                 }
-            } else if(auto waitingset = dynamic_cast<NotifiableWaitingSet*>(node.stage);
-                      waitingset != nullptr) {
+            } else if(
+                auto waitingset = dynamic_cast<NotifiableWaitingSet*>(node.stage);
+                waitingset != nullptr) {
                 for(const auto& point : waitingset->Slots()) {
                     if(!geometry->InsideGeometry(point)) {
                         faultyStages.push_back(stageId);

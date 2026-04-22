@@ -77,6 +77,20 @@ endif ()
 set(GLM_ENABLE_CXX_20 ON CACHE BOOL "" FORCE)
 add_subdirectory(glm)
 
+# Define a static library for Perfetto.
+add_library(perfetto STATIC perfetto/perfetto.cc)
+target_include_directories(perfetto PUBLIC perfetto)
+target_compile_features(perfetto PUBLIC cxx_std_17)
+
+if (WIN32)
+  # The perfetto library contains many symbols, so it needs the big object
+  # format.
+  target_compile_options(perfetto PRIVATE "/bigobj")
+  # Disable legacy features in windows.h.
+  add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
+endif (WIN32)
+
+
 ################################################################################
 # Chrome Trace Event Format Profiler
 ################################################################################

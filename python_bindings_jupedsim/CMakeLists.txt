@@ -27,14 +27,11 @@ target_link_libraries(py_jupedsim
         fmt::fmt
         simulator
         common
+        perfetto
 )
 
 pybind11_extension(py_jupedsim)
 
-if(BUILD_PROFILER)
-    target_link_libraries(py_jupedsim PUBLIC profilerLib)
-    target_compile_definitions(py_jupedsim PUBLIC BUILD_PROFILER)
-endif()
 
 if(NOT MSVC AND NOT ${CMAKE_BUILD_TYPE} MATCHES Debug|RelWithDebInfo)
     # Strip unnecessary sections of the binary on Linux/macOS

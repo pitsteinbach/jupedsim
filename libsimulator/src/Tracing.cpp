@@ -1,30 +1,53 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "Tracing.hpp"
 
+#include <perfetto.h>
+
+PERFETTO_DEFINE_CATEGORIES(perfetto::Category("main").SetDescription("Main iteration over agents"));
+
 #include <chrono>
 #include <cstdint>
+#include <fstream>
+#include <functional>
+#include <iomanip>
 #include <iostream>
 #include <optional>
 #include <utility>
 
-#ifdef BUILD_PROFILER
-#include "ProfilerLib/DurationEvent.hpp"
-#endif
-
 namespace cr = std::chrono;
 
-Trace::Trace() : t(0)
+// Must be defined exactly once for the track-event namespace to provide
+// storage backing symbols like perfetto::...::kCategoryRegistry.
+PERFETTO_TRACK_EVENT_STATIC_STORAGE();
+
+namespace
+{
+perfetto::TraceConfig BuildDefaultTraceConfig()
+{
+    perfetto::TraceConfig cfg;
+
+    auto* buffer = cfg.add_buffers();
+    buffer->set_size_kb(8192);
+
+    auto* ds_cfg = cfg.add_data_sources()->mutable_config();
+    ds_cfg->set_name("track_event");
+
+    return cfg;
+}
+} // namespace
+
+TimerEntry::TimerEntry() : t(0)
 {
 }
 
-Trace::Trace(Trace&& other) noexcept
+TimerEntry::TimerEntry(TimerEntry&& other) noexcept
     : startedAt(std::move(other.startedAt)), t(other.t), running(other.running)
 {
     other.t = 0;
     other.running = false;
 }
 
-Trace& Trace::operator=(Trace&& other) noexcept
+TimerEntry& TimerEntry::operator=(TimerEntry&& other) noexcept
 {
     if(this != &other) {
         startedAt = std::move(other.startedAt);
@@ -36,11 +59,12 @@ Trace& Trace::operator=(Trace&& other) noexcept
     return *this;
 }
 
-Trace::Trace(const Trace& other) : startedAt(other.startedAt), t(other.t), running(other.running)
+TimerEntry::TimerEntry(const TimerEntry& other)
+    : startedAt(other.startedAt), t(other.t), running(other.running)
 {
 }
 
-Trace& Trace::operator=(const Trace& other)
+TimerEntry& TimerEntry::operator=(const TimerEntry& other)
 {
     if(this != &other) {
         startedAt = other.startedAt;
@@ -50,7 +74,7 @@ Trace& Trace::operator=(const Trace& other)
     return *this;
 }
 
-void Trace::start()
+void TimerEntry::start()
 {
     if(!running) {
         running = true;
@@ -58,7 +82,7 @@ void Trace::start()
     }
 }
 
-void Trace::stop()
+void TimerEntry::stop()
 {
     if(running) {
         running = false;
@@ -68,50 +92,83 @@ void Trace::stop()
     }
 }
 
-uint64_t Trace::getDuration() const
+uint64_t TimerEntry::getDuration() const
 {
     return t;
 }
 
-#ifdef BUILD_PROFILER
-void PerfStats::PushProfilerProbe(const std::string& name)
+PerfStats::~PerfStats()
 {
-    if(!profiler) {
-        profiler = std::make_shared<Profiler>("JPS Simulator", prof_filename);
-    }
-    if(event_map.find(name) == event_map.end()) {
-        std::string event_name = "JPS Simulator - " + name;
-        event_map[name] = std::make_shared<DurationEvent>(*profiler, event_name);
-        event_map[name]->start();
-    } else {
-        event_map[name]->start();
-        // Probe already exists, return
-        return;
-    }
-}
-void PerfStats::PopProfilerProbe(const std::string& name)
-{
-    if(event_map.find(name) != event_map.end()) {
-        event_map[name]->stop();
-    }
 }
 
-#else
+void PerfStats::CreateProfilerSession()
+{
+    if(tracing_session) {
+        return;
+    }
+
+    if(!perfetto::Tracing::IsInitialized()) {
+        perfetto::TracingInitArgs args;
+        args.backends |= perfetto::kInProcessBackend;
+        perfetto::Tracing::Initialize(args);
+    }
+
+    perfetto::TrackEvent::Register();
+
+    tracing_session = perfetto::Tracing::NewTrace();
+    tracing_session->Setup(BuildDefaultTraceConfig());
+    tracing_session->StartBlocking();
+}
+
+void PerfStats::DumpProfilerSession(const std::string& filename)
+{
+    if(!tracing_session) {
+        return;
+    }
+
+    perfetto::TrackEvent::Flush();
+    tracing_session->StopBlocking();
+    const auto trace_data = tracing_session->ReadTraceBlocking();
+
+    std::ofstream output(filename, std::ios::binary | std::ios::trunc);
+    if(output.is_open()) {
+        output.write(trace_data.data(), static_cast<std::streamsize>(trace_data.size()));
+        output.flush();
+    } else {
+        std::cerr << "Failed to open Perfetto output file: " << filename << std::endl;
+    }
+
+    tracing_session.reset();
+}
+
+void PerfStats::EnableProfiler(bool status)
+{
+    if(status == enable_tracing) {
+        return;
+    }
+
+    enable_tracing = status;
+}
+
 void PerfStats::PushProfilerProbe(const std::string& name)
 {
+    if(!tracing_session) {
+        CreateProfilerSession();
+    }
+    TRACE_EVENT_BEGIN("main", perfetto::DynamicString{name.c_str()});
 }
 void PerfStats::PopProfilerProbe(const std::string& name)
 {
+    TRACE_EVENT_END("main");
 }
-#endif
 
 void PerfStats::PushTimerProbe(const std::string& name, int loglevel)
 {
-    if (loglevel > log_level) {
+    if(loglevel > log_level) {
         return;
     }
     if(timer_map.find(name) == timer_map.end()) {
-        timer_map[name] = Trace();
+        timer_map[name] = TimerEntry();
         timer_map[name].start();
     } else {
         timer_map[name].start();

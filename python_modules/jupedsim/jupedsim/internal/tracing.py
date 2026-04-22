@@ -105,7 +105,13 @@ class Trace:
     def __str__(self) -> str:
         return self.__repr__()
     
+    def dump_profiler_traces(self, filename: str) -> None:
+        """
+        Dumps the profiler traces to a file. The file can be opened with a profiler viewer such as chrome://tracing.
 
-    def enable_tracing(self) -> None:
-        #self._timer.enable_tracing()
-        pass
+        Args:
+            filename: Name of the file to dump the profiler traces to.
+        """
+        self._timer.dump_profiler_traces(filename)
+
+   

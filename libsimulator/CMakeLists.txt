@@ -99,6 +99,7 @@ target_link_libraries(simulator PUBLIC
     CGAL::CGAL
     build_info
     glm::glm
+    perfetto
 )
 target_link_options(simulator PUBLIC
     $<$<AND:$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>,$<BOOL:${BUILD_WITH_SANITIZERS}>>:-fsanitize=address,undefined>
@@ -110,10 +111,6 @@ target_include_directories(simulator PUBLIC
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION ${USE_IPO})
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
 
-if (UNIX)
-    target_link_libraries(simulator PUBLIC profilerLib)
-    target_compile_definitions(simulator PUBLIC BUILD_PROFILER)
-endif()
 
 ################################################################################
 # libsimulator unit tests

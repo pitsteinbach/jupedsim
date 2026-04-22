@@ -12,6 +12,7 @@ void init_trace(py::module_& m)
 {
     py::class_<PerfStats>(m, "Trace")
         .def("enable_profiler",[](PerfStats& ps, const bool status) { return ps.EnableProfiler(status); })
+        .def("dump_profiler_traces", [](PerfStats& ps, const std::string& filename) { ps.DumpProfilerSession(filename); })
         .def("get_timer_entry", [](const PerfStats& ps, const std::string& name) { return ps.GetTimerEntry(name); })
         .def("get_timer_entries", [](const PerfStats& ps) { return ps.GetTimerEntries(); })
         .def("push_timer", [](PerfStats& ps, const std::string& name) { ps.PushTimerProbe(name); })
