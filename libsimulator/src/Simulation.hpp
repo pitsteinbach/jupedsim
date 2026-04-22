@@ -48,6 +48,9 @@ class Simulation
     std::vector<GenericAgent::ID> _removedAgentsInLastIteration;
     std::unordered_map<Journey::ID, std::unique_ptr<Journey>> _journeys;
     PerfStats _perfStats{};
+    int _loglevel_general = 1;
+    int _loglevel_detailed = 2;
+    int _loglevel_debug = 3;
 
 public:
     Simulation(
@@ -87,6 +90,7 @@ public:
     void SwitchGeometry(std::unique_ptr<CollisionGeometry>&& geometry);
     void PushTimer(const std::string& name);
     void PopTimer(const std::string& name);
+    void SetLogLevelTimer(int level) { _perfStats.SetLogLevel(level); };
 
 private:
     void ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geometry) const;

@@ -105,8 +105,11 @@ void PerfStats::PopProfilerProbe(const std::string& name)
 }
 #endif
 
-void PerfStats::PushTimerProbe(const std::string& name)
+void PerfStats::PushTimerProbe(const std::string& name, int loglevel)
 {
+    if (loglevel > log_level) {
+        return;
+    }
     if(timer_map.find(name) == timer_map.end()) {
         timer_map[name] = Trace();
         timer_map[name].start();
@@ -162,26 +165,10 @@ void PerfStats::PrintTimerEntries() const
               << "(100%)" << std::endl;
 }
 
-uint64_t PerfStats::IterationDuration() const
+uint64_t PerfStats::GetTimerEntry(const std::string& name) const
 {
-    std::string key = "Total Iteration";
-    if(timer_map.find(key) != timer_map.end()) {
-        uint64_t current = timer_map.at(key).getDuration();
-        current = current - last_iteration_duration;
-        this->last_iteration_duration = timer_map.at(key).getDuration();
-        return current;
-    }
-    return 0;
-}
-
-uint64_t PerfStats::OpDecSystemRunDuration() const
-{
-    std::string key = "Operational Decision System";
-    if(timer_map.find(key) != timer_map.end()) {
-        uint64_t current = timer_map.at(key).getDuration();
-        current = current - last_operational_duration;
-        last_operational_duration = timer_map.at(key).getDuration();
-        return current;
+    if(timer_map.find(name) != timer_map.end()) {
+        return timer_map.at(name).getDuration();
     }
     return 0;
 }

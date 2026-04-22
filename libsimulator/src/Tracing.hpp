@@ -31,26 +31,23 @@ public:
 
 class PerfStats
 {
-    mutable uint64_t last_iteration_duration{0};
-    mutable uint64_t last_operational_duration{0};
     bool enable_tracing{false};
-#ifdef BUILD_PROFILER    
+    int log_level{0};
+#ifdef BUILD_PROFILER
     std::string prof_filename{"jps_simulator.json"};
     std::shared_ptr<Profiler> profiler{};
     std::map<std::string, std::shared_ptr<DurationEvent>> event_map{};
 #endif
-
-    std::map<std::string, Trace> timer_map{};
+    std::unordered_map<std::string, Trace> timer_map{};
 
 public:
-    std::optional<Trace> TraceIterate();
-    std::optional<Trace> TraceOperationalDecisionSystemRun();
-    void PushTimerProbe(const std::string& name);
+    void PushTimerProbe(const std::string& name, int loglevel = 0);
     void PopTimerProbe(const std::string& name);
     void EnableProfiler(bool status) { enable_tracing = status; };
-    uint64_t IterationDuration() const;
-    uint64_t OpDecSystemRunDuration() const;
+    uint64_t GetTimerEntry(const std::string& name) const;
+#ifdef BUILD_PROFILER
     void SetProfilerFilename(const std::string& filename) { prof_filename = filename; };
+#endif
     void PrintTimerEntries() const;
     std::map<std::string, uint64_t> GetTimerEntries() const
     {
@@ -60,7 +57,8 @@ public:
         }
         return entries;
     }
-
+    void SetLogLevel(int level) { log_level = level; };
+    int GetLogLevel() const { return log_level; };
 private:
     void PushProfilerProbe(const std::string& name);
     void PopProfilerProbe(const std::string& name);
