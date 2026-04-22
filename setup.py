@@ -150,7 +150,6 @@ class CMakeBuild(build_ext):
         # Pile all .so in one place and use $ORIGIN as RPATH
         cmake_args += ["-DCMAKE_BUILD_WITH_INSTALL_RPATH=TRUE"]
         cmake_args += ["-DCMAKE_INSTALL_RPATH={}".format("$ORIGIN")]
-        cmake_args += ["-DBUILD_PROFILER=ON"]
 
         build_args = []
         # Adding CMake arguments set as environment variable

@@ -77,7 +77,12 @@ endif ()
 set(GLM_ENABLE_CXX_20 ON CACHE BOOL "" FORCE)
 add_subdirectory(glm)
 
-# Define a static library for Perfetto.
+
+
+################################################################################
+# Perfetto SDK
+################################################################################
+
 add_library(perfetto STATIC perfetto/perfetto.cc)
 target_include_directories(perfetto PUBLIC perfetto)
 target_compile_features(perfetto PUBLIC cxx_std_17)
@@ -89,15 +94,3 @@ if (WIN32)
   # Disable legacy features in windows.h.
   add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
 endif (WIN32)
-
-
-################################################################################
-# Chrome Trace Event Format Profiler
-################################################################################
-
-if (BUILD_PROFILER)
-    message(STATUS "Building with profiler support")
-    add_subdirectory(Profiler)
-    add_compile_definitions(BUILD_PROFILER)
-    #target_link_libraries(myProgram PRIVATE profilerLib)
-endif()
