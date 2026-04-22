@@ -57,6 +57,6 @@ public:
 
 private:
     void PushProfilerProbe(const std::string& name);
-    void PopProfilerProbe(const std::string& name);
+    void PopProfilerProbe();
     void CreateProfilerSession();
 };

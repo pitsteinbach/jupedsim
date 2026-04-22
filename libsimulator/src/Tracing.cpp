@@ -157,7 +157,7 @@ void PerfStats::PushProfilerProbe(const std::string& name)
     }
     TRACE_EVENT_BEGIN("main", perfetto::DynamicString{name.c_str()});
 }
-void PerfStats::PopProfilerProbe(const std::string& name)
+void PerfStats::PopProfilerProbe()
 {
     TRACE_EVENT_END("main");
 }
@@ -184,7 +184,7 @@ void PerfStats::PopTimerProbe(const std::string& name)
         timer_map[name].stop();
     }
     if(enable_tracing) {
-        PopProfilerProbe(name);
+        PopProfilerProbe();
     }
 }
 

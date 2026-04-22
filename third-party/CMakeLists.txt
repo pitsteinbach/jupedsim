@@ -86,6 +86,7 @@ add_subdirectory(glm)
 add_library(perfetto STATIC perfetto/perfetto.cc)
 target_include_directories(perfetto PUBLIC perfetto)
 target_compile_features(perfetto PUBLIC cxx_std_17)
+target_compile_options(perfetto PRIVATE -fPIC)
 
 if (WIN32)
   # The perfetto library contains many symbols, so it needs the big object
