@@ -559,7 +559,7 @@ class Simulation:
         """
         internal_geometry = build_geometry(geometry)
         self._obj.switch_geometry(internal_geometry._obj)
-    
+
     @property
     def timer(self) -> Trace:
         """Timer for measuring time spent in different stages of the simulation.

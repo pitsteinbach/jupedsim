@@ -9,8 +9,10 @@ class Trace:
     internally to measure the time spent in different stages of the simulation.
     """
 
-    def __init__(self, timer_object: py_jps.Trace=None):
-        self._timer = timer_object if timer_object is not None else py_jps.Trace()
+    def __init__(self, timer_object: py_jps.Trace = None):
+        self._timer = (
+            timer_object if timer_object is not None else py_jps.Trace()
+        )
         self._timer_dict = None
         self._prev_iteration_time = 0
         self._prev_op_dec_time = 0
@@ -21,15 +23,15 @@ class Trace:
         # even if the timer has been stopped this should not change things
         self._timer.pop_timer("Total Simulation Time")
         timer_dict = self._timer.get_timer_entries()
-        if (timer_dict.get("Total Simulation Time") is not None):
+        if timer_dict.get("Total Simulation Time") is not None:
             ref = timer_dict["Total Simulation Time"]
             timer_dict.pop("Total Simulation Time")
         else:
             ref = timer_dict.get("TotalIteration")
             timer_dict.pop("TotalIteration")
-        out=f"JuPedSim Timings:\n{'-'*53}\n"
+        out = f"JuPedSim Timings:\n{'-' * 53}\n"
         for name, duration in timer_dict.items():
-            if duration/ref*100 < 0.01:
+            if duration / ref * 100 < 0.01:
                 continue
             tabs = ""
             if len(name) < 12:
@@ -38,10 +40,10 @@ class Trace:
                 tabs = "\t\t"
             else:
                 tabs = "\t"
-            out += f"{name}: {tabs} {duration/1000000:8.2f} s ({duration/ref*100:5.2f}%)\n"
-   
+            out += f"{name}: {tabs} {duration / 1000000:8.2f} s ({duration / ref * 100:5.2f}%)\n"
+
         out += "-----------------------------------------------------\n"
-        out += f"Total Simulation Time: \t\t {ref/1000000:8.2f} s\n"
+        out += f"Total Simulation Time: \t\t {ref / 1000000:8.2f} s\n"
         out += ""
         return out
 
@@ -51,7 +53,7 @@ class Trace:
             Elapsed time in microseconds.
         """
         return self._timer.get_timer_entry(key)
-    
+
     def push_timer(self, name: str) -> None:
         """
         Pushes a timer with the given name. The timer will be stopped when the corresponding pop_timer is called.
@@ -59,8 +61,10 @@ class Trace:
         Args:
             name: Name of the timer to be pushed.
         """
-        print("Warning: you are pushing to copy of the C++ timer. " \
-        "This will not affect the original timer and the timings will not be recorded.")
+        print(
+            "Warning: you are pushing to copy of the C++ timer. "
+            "This will not affect the original timer and the timings will not be recorded."
+        )
 
     def pop_timer(self, name: str) -> None:
         """
@@ -70,7 +74,7 @@ class Trace:
             name: Name of the timer to be popped.
         """
         self._timer.pop_timer(name)
-    
+
     @property
     def iteration_duration_us(self) -> int:
         """
@@ -79,7 +83,9 @@ class Trace:
         """
         current_iteration_time = self._timer.get_timer_entry("Total Iteration")
         iteration_duration = current_iteration_time - self._prev_iteration_time
-        self._prev_iteration_time = self._timer.get_timer_entry("Total Iteration")
+        self._prev_iteration_time = self._timer.get_timer_entry(
+            "Total Iteration"
+        )
         return iteration_duration
 
     @property
@@ -88,11 +94,15 @@ class Trace:
         Returns:
             Elapsed time per iteration of the operational level in microseconds.
         """
-        current_op_dec_time = self._timer.get_timer_entry("Operational Decision System")
+        current_op_dec_time = self._timer.get_timer_entry(
+            "Operational Decision System"
+        )
         op_dec_duration = current_op_dec_time - self._prev_op_dec_time
-        self._prev_op_dec_time = self._timer.get_timer_entry("Operational Decision System")
+        self._prev_op_dec_time = self._timer.get_timer_entry(
+            "Operational Decision System"
+        )
         return op_dec_duration
-    
+
     def set_timer_instance(self, timer_object: py_jps.Trace) -> None:
         """
         Sets the timer object to be used for tracing. This can be used to set a custom timer object that is not the default one.
@@ -104,7 +114,7 @@ class Trace:
 
     def __str__(self) -> str:
         return self.__repr__()
-    
+
     def dump_profiler_traces(self, filename: str) -> None:
         """
         Dumps the profiler traces to a file. The file can be opened with a profiler viewer such as chrome://tracing.
@@ -113,5 +123,3 @@ class Trace:
             filename: Name of the file to dump the profiler traces to.
         """
         self._timer.dump_profiler_traces(filename)
-
-   
