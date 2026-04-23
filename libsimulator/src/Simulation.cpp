@@ -62,7 +62,7 @@ void Simulation::SetTracing(bool status)
     _perfStats.EnableProfiler(status);
 };
 
-const PerfStats& Simulation::GetLastStats() const
+PerfStats Simulation::GetLastStats() const
 {
     return _perfStats;
 };
