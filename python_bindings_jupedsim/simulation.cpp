@@ -128,7 +128,7 @@ void init_simulation(py::module_& m)
         .def("set_tracing", [](Simulation& sim, bool status) { sim.SetTracing(status); })
         .def(
             "get_last_timer",
-            [](Simulation& sim) -> Timer { return sim.GetLastStats(); })
+            [](Simulation& sim) -> Timer { return sim.GetLastTimer(); })
         .def("set_log_level_timer", [](Simulation& sim, int level) { sim.SetLogLevelTimer(level); })
         .def("get_geometry", [](Simulation& sim) { return sim.Geo(); })
         .def("push_timer", [](Simulation& sim, const std::string& name) { sim.PushTimer(name); })

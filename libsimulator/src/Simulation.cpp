@@ -66,7 +66,7 @@ void Simulation::SetTracing(bool status)
     }
 };
 
-Timer Simulation::GetLastStats() const
+Timer Simulation::GetLastTimer() const
 {
     return _timer;
 };

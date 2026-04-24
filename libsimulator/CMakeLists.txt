@@ -113,7 +113,6 @@ target_include_directories(simulator PUBLIC
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION ${USE_IPO})
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
 
-
 ################################################################################
 # libsimulator unit tests
 ################################################################################
@@ -172,4 +171,3 @@ if (BUILD_BENCHMARKS)
     set_property(TARGET libsimulator-benchmarks PROPERTY INTERPROCEDURAL_OPTIMIZATION ${USE_IPO})
     set_property(TARGET libsimulator-benchmarks PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
 endif ()
-
