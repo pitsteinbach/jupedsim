@@ -18,6 +18,7 @@
 #include "StageSystem.hpp"
 #include "StrategicalDesicionSystem.hpp"
 #include "TacticalDecisionSystem.hpp"
+#include "Timing.hpp"
 #include "Tracing.hpp"
 
 #include <cstddef>
@@ -47,10 +48,8 @@ class Simulation
     std::vector<GenericAgent> _agents;
     std::vector<GenericAgent::ID> _removedAgentsInLastIteration;
     std::unordered_map<Journey::ID, std::unique_ptr<Journey>> _journeys;
-    PerfStats _perfStats{};
-    int _loglevel_general = 1;
-    int _loglevel_detailed = 2;
-    int _loglevel_debug = 3;
+    Timer _timer{};
+    enum LogLevel { General = 1, Detailed = 2, Debug = 3 };
 
 public:
     Simulation(
@@ -64,7 +63,7 @@ public:
     ~Simulation() = default;
     const SimulationClock& Clock() const;
     void SetTracing(bool on);
-    PerfStats GetLastStats() const;
+    Timer GetLastStats() const;
     void Iterate();
     Journey::ID AddJourney(const std::map<BaseStage::ID, TransitionDescription>& stages);
     BaseStage::ID AddStage(const StageDescription stageDescription);
@@ -90,7 +89,7 @@ public:
     void SwitchGeometry(std::unique_ptr<CollisionGeometry>&& geometry);
     void PushTimer(const std::string& name);
     void PopTimer(const std::string& name);
-    void SetLogLevelTimer(int level) { _perfStats.SetLogLevel(level); };
+    void SetLogLevelTimer(int level) { _timer.setLogLevel(level); };
 
 private:
     void ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geometry) const;

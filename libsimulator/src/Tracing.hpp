@@ -3,60 +3,95 @@
 
 #include <perfetto.h>
 
-#include <chrono>
-#include <cstdint>
-#include <map>
+PERFETTO_DEFINE_CATEGORIES(perfetto::Category("main").SetDescription("Main iteration over agents"));
+
+#include <functional>
 #include <memory>
-#include <optional>
 #include <string>
-#include <unordered_map>
 
-class TimerEntry
+#ifndef JPS_SCOPE_CONCAT_IMPL
+#define JPS_SCOPE_CONCAT_IMPL(x, y) x##y
+#endif
+#ifndef JPS_SCOPE_CONCAT
+#define JPS_SCOPE_CONCAT(x, y) JPS_SCOPE_CONCAT_IMPL(x, y)
+#endif
+#ifndef JPS_SCOPED_PROBE
+#define JPS_SCOPED_PROBE(profiler_obj, name)                                                       \
+    auto JPS_SCOPE_CONCAT(_jps_scoped_probe_guard_, __COUNTER__) =                                 \
+        (profiler_obj).scopedProbe((name))
+#endif
+
+// PorfilerSingleton is a wrapper around perfetto::TracingSession to provide a simple interface for
+// the rest of the codebase. It is implemented as a singleton to ensure that there is only one
+// instance of the profiler throughout the application. The Timer class also accesses the profiler
+// to record traces that aline with the timer entries.
+// This allows for a unified tracing and timing system that can be easily accessed and used
+// throughout the codebase.
+class ProfilerSingleton
 {
-    std::chrono::high_resolution_clock::time_point startedAt;
-    uint64_t t;
-    bool running{false};
+    static ProfilerSingleton profiler;
 
 public:
-    TimerEntry();
-    ~TimerEntry() {}
-    TimerEntry(const TimerEntry& other);
-    TimerEntry& operator=(const TimerEntry& other);
-    TimerEntry(TimerEntry&& other) noexcept;
-    TimerEntry& operator=(TimerEntry&& other) noexcept;
-    void start();
-    void stop();
-    uint64_t getDuration() const;
-};
-
-class PerfStats
-{
-    bool enable_tracing{false};
-    int log_level{0};
-    std::unordered_map<std::string, TimerEntry> timer_map{};
-    std::shared_ptr<perfetto::TracingSession> tracing_session{};
-
-public:
-    ~PerfStats();
-    void PushTimerProbe(const std::string& name, int loglevel = 0);
-    void PopTimerProbe(const std::string& name);
-    void EnableProfiler(bool status);
-    uint64_t GetTimerEntry(const std::string& name) const;
-    void DumpProfilerSession(const std::string& filename);
-    void PrintTimerEntries() const;
-    std::map<std::string, uint64_t> GetTimerEntries() const
+    class ScopedProbeGuard
     {
-        std::map<std::string, uint64_t> entries;
-        for(const auto& [name, trace] : timer_map) {
-            entries[name] = trace.getDuration();
+        ProfilerSingleton* profiler{nullptr};
+
+    public:
+        ScopedProbeGuard() = default;
+
+        ScopedProbeGuard(ProfilerSingleton* const profiler, const std::string& name)
+            : profiler(profiler)
+        {
+            if(this->profiler) {
+                this->profiler->pushProbe(name);
+            }
         }
-        return entries;
+        ~ScopedProbeGuard()
+        {
+            if(profiler) {
+                profiler->popProbe();
+            }
+        }
+        ScopedProbeGuard(const ScopedProbeGuard&) = delete;
+        ScopedProbeGuard& operator=(const ScopedProbeGuard&) = delete;
+        ScopedProbeGuard(ScopedProbeGuard&& other) noexcept : profiler(other.profiler)
+        {
+            other.profiler = nullptr;
+        }
+        ScopedProbeGuard& operator=(ScopedProbeGuard&& other) noexcept
+        {
+            if(this != &other) {
+                if(profiler) {
+                    profiler->popProbe();
+                }
+                profiler = other.profiler;
+                other.profiler = nullptr;
+            }
+            return *this;
+        }
+    };
+
+    static ProfilerSingleton& instance() noexcept { return profiler; };
+
+    void enable();
+    void disable();
+    void pushProbe(const std::string& name);
+    void popProbe();
+    [[nodiscard]] inline ScopedProbeGuard scopedProbe(const std::string& name)
+    {
+        return ScopedProbeGuard(this, name);
     }
-    void SetLogLevel(int level) { log_level = level; };
-    int GetLogLevel() const { return log_level; };
+
+    void dump(const std::string& filename);
+    inline bool isEnabled() const { return enabled; }
 
 private:
-    void PushProfilerProbe(const std::string& name);
-    void PopProfilerProbe();
-    void CreateProfilerSession();
+    ProfilerSingleton() = default;
+    ProfilerSingleton(const ProfilerSingleton&) = delete;
+    ProfilerSingleton& operator=(const ProfilerSingleton&) = delete;
+
+    void createSession();
+    void writeAndResetSession(const std::string& filename);
+    bool enabled{false};
+    std::unique_ptr<perfetto::TracingSession> tracing_session{};
 };

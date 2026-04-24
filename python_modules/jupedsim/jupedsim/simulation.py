@@ -8,7 +8,7 @@ import jupedsim.native as py_jps
 from jupedsim.agent import Agent
 from jupedsim.geometry import Geometry
 from jupedsim.geometry_utils import build_geometry
-from jupedsim.internal.tracing import Trace
+from jupedsim.internal.tracing import Timer
 from jupedsim.journey import JourneyDescription
 from jupedsim.models.anticipation_velocity_model import (
     AnticipationVelocityModel,
@@ -140,7 +140,6 @@ class Simulation:
         else:
             raise Exception("Unknown model type supplied")
         self._writer = trajectory_writer
-        self._enable_timer_printout = False
         self._obj = py_jps.Simulation(
             model=py_jps_model, geometry=build_geometry(geometry)._obj, dt=dt
         )
@@ -536,8 +535,8 @@ class Simulation:
     def set_tracing(self, status: bool) -> None:
         self._obj.set_tracing(status)
 
-    def get_last_trace(self) -> Trace:
-        return self._timer
+    def get_last_timer(self) -> Timer:
+        return self.timer
 
     def get_geometry(self) -> Geometry:
         """Current geometry of the simulation.
@@ -561,13 +560,13 @@ class Simulation:
         self._obj.switch_geometry(internal_geometry._obj)
 
     @property
-    def timer(self) -> Trace:
+    def timer(self) -> Timer:
         """Timer for measuring time spent in different stages of the simulation.
 
         Returns:
             Timer object.
         """
         if self._timer is None:
-            self._timer = Trace(self._obj.get_last_trace())
+            self._timer = Timer(self._obj.get_last_trace())
         self._timer.set_timer_instance(self._obj.get_last_trace())
         return self._timer

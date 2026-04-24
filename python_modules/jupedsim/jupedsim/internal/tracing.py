@@ -3,15 +3,15 @@
 import jupedsim.native as py_jps
 
 
-class Trace:
+class Timer:
     """
     Timer can be used to measure the time spent in a code block. It is used
     internally to measure the time spent in different stages of the simulation.
     """
 
-    def __init__(self, timer_object: py_jps.Trace = None):
+    def __init__(self, timer_object: py_jps.Timer = None):
         self._timer = (
-            timer_object if timer_object is not None else py_jps.Trace()
+            timer_object if timer_object is not None else py_jps.Timer()
         )
         self._timer_dict = None
         self._prev_iteration_time = 0
@@ -33,17 +33,10 @@ class Trace:
         for name, duration in timer_dict.items():
             if duration / ref * 100 < 0.01:
                 continue
-            tabs = ""
-            if len(name) < 12:
-                tabs = "\t\t\t"
-            elif len(name) < 20:
-                tabs = "\t\t"
-            else:
-                tabs = "\t"
-            out += f"{name}: {tabs} {duration / 1000000:8.2f} s ({duration / ref * 100:5.2f}%)\n"
+            out += f"{name:<30}| {duration / 1000000:8.2f} s ({duration / ref * 100:5.2f}%)\n"
 
         out += "-----------------------------------------------------\n"
-        out += f"Total Simulation Time: \t\t {ref / 1000000:8.2f} s\n"
+        out += f"{('Total Simulation Time'):<30}| {ref / 1000000:8.2f} s\n"
         out += ""
         return out
 
@@ -115,11 +108,40 @@ class Trace:
     def __str__(self) -> str:
         return self.__repr__()
 
-    def dump_profiler_traces(self, filename: str) -> None:
-        """
-        Dumps the profiler traces to a file. The file can be opened with a profiler viewer such as chrome://tracing.
+
+class Profiler:
+    """
+    Profiler can be used to enable and disable the profiler and to dump the profiler traces to a file.
+    """
+
+    def __init__(self):
+        self._profiler = py_jps.Trace.instance()
+        self.enable()
+
+    def enable(self) -> None:
+        """Enables the profiler."""
+        self._profiler.enable()
+
+    def disable(self) -> None:
+        """Disables the profiler."""
+        self._profiler.disable()
+
+    def dump(self, filename: str) -> None:
+        """Dumps the profiler traces to a file.
 
         Args:
-            filename: Name of the file to dump the profiler traces to.
+            filename: Name of the file to dump the traces to.
         """
-        self._timer.dump_profiler_traces(filename)
+        self._profiler.dump(filename)
+
+    def push_probe(self, name: str) -> None:
+        """Pushes a probe with the given name. The probe will be stopped when the corresponding pop_probe is called.
+
+        Args:
+            name: Name of the probe to be pushed.
+        """
+        self._profiler.push_probe(name)
+
+    def pop_probe(self) -> None:
+        """Pops the last pushed probe. The probe will be stopped and the elapsed time will be recorded."""
+        self._profiler.pop_probe()
