@@ -14,7 +14,7 @@ from jupedsim.distributions import (
     distribute_until_filled,
 )
 from jupedsim.geometry import Geometry
-from jupedsim.internal.tracing import Timer, Trace
+from jupedsim.internal.tracing import Timer, Profiler
 from jupedsim.journey import JourneyDescription, Transition
 from jupedsim.library import (
     BuildInfo,
@@ -94,6 +94,7 @@ __all__ = [
     "NegativeValueError",
     "NotifiableQueueStage",
     "OverlappingCirclesError",
+    "Profiler",
     "Recording",
     "RecordingAgent",
     "RecordingFrame",
@@ -101,7 +102,6 @@ __all__ = [
     "Simulation",
     "SqliteTrajectoryWriter",
     "Timer",
-    "Trace",
     "TrajectoryWriter",
     "Transition",
     "CollisionFreeSpeedModelAgentParameters",

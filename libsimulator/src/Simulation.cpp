@@ -59,12 +59,11 @@ const SimulationClock& Simulation::Clock() const
 
 void Simulation::SetTracing(bool status)
 {
-    if (status) {
+    if(status) {
         ProfilerSingleton::instance().enable();
     } else {
         ProfilerSingleton::instance().disable();
     }
-    
 };
 
 Timer Simulation::GetLastStats() const
