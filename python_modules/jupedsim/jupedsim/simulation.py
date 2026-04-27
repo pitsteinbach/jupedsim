@@ -567,6 +567,6 @@ class Simulation:
             Timer object.
         """
         if self._timer is None:
-            self._timer = Timer(self._obj.get_last_trace())
-        self._timer.set_timer_instance(self._obj.get_last_trace())
+            self._timer = Timer(self._obj.get_last_timer())
+        self._timer.set_timer_instance(self._obj.get_last_timer())
         return self._timer
