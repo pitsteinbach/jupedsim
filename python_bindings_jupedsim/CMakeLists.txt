@@ -37,6 +37,11 @@ if(NOT MSVC AND NOT ${CMAKE_BUILD_TYPE} MATCHES Debug|RelWithDebInfo)
     pybind11_strip(py_jupedsim)
 endif()
 
+if (HAS_OMP)
+    target_compile_definitions(py_jupedsim PUBLIC JPS_USE_OMP_PARALLEL_FOR)
+    target_link_libraries(py_jupedsim PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
 set_target_properties(py_jupedsim
     PROPERTIES
         CXX_VISIBILITY_PRESET "hidden"

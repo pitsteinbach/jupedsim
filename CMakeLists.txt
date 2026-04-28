@@ -54,6 +54,16 @@ if(WITH_FORMAT AND ${CMAKE_SYSTEM} MATCHES "Windows")
     message(FATAL_ERROR "Format target not supported on Windows")
 endif()
 
+find_package(OpenMP)
+
+if(OpenMP_CXX_FOUND)
+    set(HAS_OPENMP ON)
+    message(STATUS "OpenMP found, parallel sections will be enabled")
+else()
+    set(HAS_OPENMP OFF)
+    message(STATUS "OpenMP not found, parallel sections will be disabled")
+endif()
+
 ################################################################################
 # Compilation flags
 ################################################################################

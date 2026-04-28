@@ -55,6 +55,8 @@ add_library(simulator STATIC
     src/OperationalDecisionSystem.hpp
     src/OperationalModel.hpp
     src/OperationalModelUpdate.hpp
+    src/ParallelRuntime.cpp
+    src/ParallelRuntime.hpp
     src/Point.cpp
     src/Point.hpp
     src/Polygon.cpp
@@ -112,6 +114,11 @@ target_include_directories(simulator PUBLIC
 )
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION ${USE_IPO})
 set_property(TARGET simulator PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
+
+if (HAS_OMP)
+    target_compile_definitions(simulator PUBLIC JPS_USE_OMP_PARALLEL_FOR)
+    target_link_libraries(simulator PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 ################################################################################
 # libsimulator unit tests
