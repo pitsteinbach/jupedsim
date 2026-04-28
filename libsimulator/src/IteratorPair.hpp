@@ -7,6 +7,8 @@
 /// _it_second must be reachable by _it_first.
 #include <cstddef>
 #include <iterator>
+#include <stdexcept>
+#include <type_traits>
 template <typename IteratorFirst, typename IteratorSecond = IteratorFirst>
 class IteratorPair
 {
@@ -24,4 +26,23 @@ public:
 
     bool empty() const { return _it_first == _it_second; }
     size_t size() const { return std::distance(_it_first, _it_second); }
+
+    // Provide indexing to allow existing code to use agents[idx]. This will
+    // work for random-access iterators in O(1) and for weaker iterators in
+    // O(n) (std::advance).
+    auto operator[](size_t idx) const -> decltype(*std::declval<IteratorFirst>())
+    {
+        IteratorFirst it = _it_first;
+        std::advance(it, static_cast<std::ptrdiff_t>(idx));
+        return *it;
+    }
+
+    // Bounds-checked access; throws std::out_of_range if idx >= size().
+    auto at(size_t idx) const -> decltype(*std::declval<IteratorFirst>())
+    {
+        if(idx >= size()) {
+            throw std::out_of_range("IteratorPair::at: index out of range");
+        }
+        return operator[](idx);
+    }
 };
