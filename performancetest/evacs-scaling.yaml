@@ -1,0 +1,61 @@
+name: JuPedSim-scaling
+outpath: bench_run
+comment: Investigate the parallel performance of Jupedsim
+
+
+fileset:
+  - name: sources
+    link:
+      - "../*"
+  - name: benchmarks
+    copy: "*py"
+  - name: sbatch
+    copy: "sbatch.sh.in" 
+
+
+parameterset:
+  - name: execute_set
+    parameter:
+      - {name: threads, type: int, _: "1, 2, 4, 8"}
+      - {name: model, type: str, _: "evac_shortest_path.py"}
+      - {name: exec, type: str, _: "python3"}
+      - {name: exec_cmd, type: str, _: "$exec $model"}
+  - name: compile_set
+    parameter:
+      - {name: threading, type: str, _: "-DJPS_USE_OMP_PARALLEL_FOR,-DJPS_USE_CUSTOM_PARALLEL_FOR"}
+
+substituteset:
+  name: sbatch
+  iofile: {in: sbatch.sh.in, out: wp_scale.yml}
+  sub:
+    - { source: "#WPVALUE#", dest: $threads }
+   
+step:
+  - name: compile
+    
+    use:
+      - compile_set
+      - sources
+    
+    do:
+      _: |
+        if [ -d "build" ]; then rm -rf build; fi
+        cmake -B build . -DCMAKE_BUILD_TYPE=Release  -GNinja -DCMAKE_CXX_FLAGS="$threading"
+        cmake --build build
+  
+
+  - name: execute
+    depend: compile
+    use:
+      - execute_set
+      - benchmarks
+      - python3
+      - sbatch
+    do:
+      #work_dir: "src/CADET-Core/build"
+      _: |
+        sbatch sbatch.sh
+
+analyse:
+  - name: runtime
+        
