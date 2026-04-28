@@ -25,7 +25,6 @@ public:
     void Run(RoutingEngine& routingEngine, auto&& agents) const
     {
 #ifdef JPS_USE_STD_PARALLEL_FOR
-        JPS_SCOPED_PROBE(ProfilerSingleton::instance(), "TacticalDecisionSystem::Run");
         std::for_each(
             std::execution::par,
             std::begin(agents),

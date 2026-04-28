@@ -14,6 +14,12 @@ fileset:
   - name: sbatch
     copy: "sbatch.sh.in" 
 
+patternset:
+  name: timeingout
+  pattern:
+    - { name: total_runtime, type: float, unit: s, _: "real $jube_pat_fp" }
+    - { name: internal_runtime, type: float, unit: s, _: "user $jube_pat_fp" }
+    - { name: error_code, type: int, _: "JUBE_ERR_CODE=$jube_pat_int" }
 
 parameterset:
   - name: execute_set
@@ -58,6 +64,22 @@ step:
       _: |
         sbatch sbatch.sh
 
-analyse:
-  - name: runtime
-        
+# Analyse
+analyser:
+  name: analyse_runtime
+  use: timeingout
+  analyse:
+    step: execute
+    file: stderr
+
+# Create result table
+result:
+  use: analyse_runtime
+  table:
+    - name: result
+      style: csv
+      column:
+        - threads
+        - threading
+        - internal_runtime
+        - total_runtime
