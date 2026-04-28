@@ -8,7 +8,9 @@ fileset:
     link:
       - "../*"
   - name: benchmarks
-    copy: "*py"
+    copy: 
+      - "*py"
+      - "Geometrie"
   - name: sbatch
     copy: "sbatch.sh.in" 
 
@@ -17,18 +19,19 @@ parameterset:
   - name: execute_set
     parameter:
       - {name: threads, type: int, _: "1, 2, 4, 8"}
-      - {name: model, type: str, _: "evac_shortest_path.py"}
+      - {name: model, type: str, _: "evac_shortest_path_v1.py"}
       - {name: exec, type: str, _: "python3"}
-      - {name: exec_cmd, type: str, _: "$exec $model"}
+      - {name: exec_cmd, type: str, _: "time -p $exec $model"}
   - name: compile_set
     parameter:
-      - {name: threading, type: str, _: "-DJPS_USE_OMP_PARALLEL_FOR,-DJPS_USE_CUSTOM_PARALLEL_FOR"}
+      - {name: threading, type: str, _: "-DJPS_USE_OMP_PARALLEL_FOR"}
 
 substituteset:
   name: sbatch
-  iofile: {in: sbatch.sh.in, out: wp_scale.yml}
+  iofile: {in: sbatch.sh.in, out: sbatch.sh}
   sub:
     - { source: "#WPVALUE#", dest: $threads }
+    - { source: "#EXEC#", dest: $exec_cmd }
    
 step:
   - name: compile
@@ -49,7 +52,6 @@ step:
     use:
       - execute_set
       - benchmarks
-      - python3
       - sbatch
     do:
       #work_dir: "src/CADET-Core/build"
