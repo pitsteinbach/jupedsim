@@ -15,6 +15,10 @@
 #include <utility>
 #include <vector>
 
+#ifdef JPS_USE_OMP_PARALLEL_FOR
+#include <omp.h>
+#endif
+
 class OperationalDecisionSystem
 {
     std::unique_ptr<OperationalModel> _model{};
@@ -41,7 +45,7 @@ public:
         std::vector<std::optional<OperationalModelUpdate>> updates{};
         updates.resize(agents.size());
 
-#ifdef JPS_USE_STD_PARALLEL_ALGORITHMS
+#ifdef JPS_USE_STD_PARALLEL_FOR
         std::transform(
             std::execution::par,
             std::begin(agents),

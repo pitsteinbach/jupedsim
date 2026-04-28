@@ -8,6 +8,10 @@
 #include <algorithm>
 #include <execution>
 
+#ifdef JPS_USE_OMP_PARALLEL_FOR
+#include <omp.h>
+#endif
+
 class TacticalDecisionSystem
 {
 public:
@@ -20,7 +24,7 @@ public:
 
     void Run(RoutingEngine& routingEngine, auto&& agents) const
     {
-#ifdef JPS_USE_STD_PARALLEL_ALGORITHMS
+#ifdef JPS_USE_STD_PARALLEL_FOR
         JPS_SCOPED_PROBE(ProfilerSingleton::instance(), "TacticalDecisionSystem::Run");
         std::for_each(
             std::execution::par,
