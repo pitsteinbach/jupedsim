@@ -93,7 +93,7 @@ void ProfilerSingleton::pushProbe(const std::string_view name)
     if(!enabled) {
         return;
     }
-    TRACE_EVENT_BEGIN("main", perfetto::DynamicString{name.cbegin()});
+    TRACE_EVENT_BEGIN("main", perfetto::DynamicString{name.data()});
 }
 
 void ProfilerSingleton::popProbe()
