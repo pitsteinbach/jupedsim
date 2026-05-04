@@ -127,12 +127,15 @@ void init_simulation(py::module_& m)
         .def("get_stage_proxy", [](Simulation& sim, uint64_t id) { return sim.Stage(id); })
         .def("set_tracing", [](Simulation& sim, bool status) { sim.SetTracing(status); })
         .def(
-            "get_last_timer",
-            [](Simulation& sim) -> Timer { return sim.GetLastTimer(); })
-        .def("set_log_level_timer", [](Simulation& sim, int level) { sim.SetLogLevelTimer(level); })
+            "set_timer_log_level",
+            [](Simulation& sim, size_t level) { sim.SetTimerLogLevel(level); })
         .def("get_geometry", [](Simulation& sim) { return sim.Geo(); })
         .def("push_timer", [](Simulation& sim, const std::string& name) { sim.PushTimer(name); })
         .def("pop_timer", [](Simulation& sim, const std::string& name) { sim.PopTimer(name); })
+        .def(
+            "get_duration",
+            [](Simulation& sim, const std::string_view name) { return sim.GetTimerDuration(name); })
+        .def("get_durations", [](Simulation& sim) { return sim.GetTimerDurations(); })
         .def("switch_geometry", [](Simulation& sim, CollisionGeometry& geometry) {
             sim.SwitchGeometry(std::make_unique<CollisionGeometry>(geometry));
         });

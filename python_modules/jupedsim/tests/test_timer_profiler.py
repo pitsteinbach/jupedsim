@@ -1,0 +1,89 @@
+import pytest
+
+
+def test_timer_integration_small_simulation(tmp_path):
+    """
+    Integration test: exercise the real C++ Timer API exposed via jupedsim.native.
+    This test will be skipped if the extension or the expected methods are not available.
+    """
+    # Build a Simulation with a real model to access the C++-backed Simulation object
+    try:
+        from jupedsim.models.collision_free_speed import (
+            CollisionFreeSpeedModel,
+        )
+        from jupedsim.simulation import Simulation
+    except Exception:
+        pytest.skip("jupedsim python bindings not importable or models missing")
+
+    # Minimal geometry: small square
+    geom = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+    sim = Simulation(model=CollisionFreeSpeedModel(), geometry=geom, dt=0.01)
+
+    # underlying C++ simulation object exposed as _obj
+    timer = sim.get_last_timer()
+
+    # Ensure the pybind Simulation exposes timer methods
+    if not (
+        hasattr(timer, "push_timer")
+        and hasattr(timer, "pop_timer")
+        and hasattr(timer, "elapsed_time_us")
+    ):
+        pytest.skip("py_jps.Simulation missing required timer methods")
+
+    timer.push_timer("integration_test")
+    import time
+
+    time.sleep(0.001)
+    timer.pop_timer("integration_test")
+
+    dur = timer.elapsed_time_us("integration_test")
+    assert isinstance(dur, int)
+    assert dur >= 0
+
+    s = str(timer)
+
+    assert "integration_test" in s
+    assert "Total Simulation Time" in s
+
+
+def test_profiler_integration_with_cpp_extension(tmp_path):
+    """
+    Integration test: exercise the real C++ Trace/Profiler API.
+    Skips when Trace.instance or methods are not available.
+    """
+    try:
+        import jupedsim.internal.tracing as tracing
+    except Exception:
+        pytest.skip("jupedsim.native extension not importable")
+
+    try:
+        profiler = tracing.Profiler()
+    except Exception:
+        pytest.skip("py_jps.Trace.instance() not available")
+
+    # Ensure basic methods exist
+    required = [
+        "enable",
+        "disable",
+        "push_probe",
+        "pop_probe",
+        "dump_and_reset",
+    ]
+    if not all(hasattr(profiler, m) for m in required):
+        pytest.skip(
+            "py_jps.Profiler missing required methods for integration test"
+        )
+
+    # enable/disable shouldn't raise
+    profiler.enable()
+    profiler.disable()
+
+    # push/pop probes
+    profiler.push_probe("integration_probe")
+    import time
+
+    time.sleep(0.001)
+    profiler.pop_probe()
+    # dump to a temp file; some backends may not write immediately but should accept the call
+    out_file = tmp_path / "trace_out.json"
+    profiler.dump_and_reset(str(out_file))

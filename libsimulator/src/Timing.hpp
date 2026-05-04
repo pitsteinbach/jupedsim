@@ -10,18 +10,21 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 
 // Helper macro to create a scoped timer probe.
 // It creates a scope guard that starts the timer probe when it is created and stops the timer probe
-// when it goes out of scope. The name of the timer probe. The log level is used to filter which
+// when it goes out of scope. The log level is used to filter which
 // timer probes are active based on the log level set in the Timer object.
 #ifndef JPS_SCOPED_TIMER
 #define JPS_SCOPED_TIMER(timer_obj, name, loglevel)                                                \
     auto JPS_SCOPE_CONCAT(_jps_scoped_timer_guard_, __COUNTER__) =                                 \
         (timer_obj).scopedTimerProbe((name), (loglevel))
 #endif
+
+using duration_type = uint64_t;
 
 // Helper class to store the start time and duration of a timer entry.
 // It also has a flag to indicate whether the timer is currently running or not.
@@ -33,15 +36,15 @@ class TimerEntry
     std::chrono::high_resolution_clock::time_point started_at;
     // Duration of the timer entry in microseconds.
     // It is updated with the time elapsed since the last start time when the timer is stopped.
-    uint64_t duration_in_microseconds{0};
+    duration_type duration_in_microseconds{0};
     // Flag to indicate whether the timer is currently running or not.
     bool running{false};
 
 public:
     TimerEntry() = default;
     ~TimerEntry() = default;
-    TimerEntry(const TimerEntry& other);
-    TimerEntry& operator=(const TimerEntry& other);
+    TimerEntry(const TimerEntry& other) = delete;
+    TimerEntry& operator=(const TimerEntry& other) = delete;
     TimerEntry(TimerEntry&& other) noexcept;
     TimerEntry& operator=(TimerEntry&& other) noexcept;
     // Starts the timer entry. If the timer entry is already running, this function does nothing.
@@ -60,7 +63,7 @@ class Timer
 {
     // Log level for the timer. Timer probes with a log level higher than
     // the set log level will not be active and will not record time.
-    int log_level{0};
+    int max_log_level{0};
     // Map of timer entry names to their corresponding TimerEntry objects.
     std::unordered_map<std::string, TimerEntry> timer_map{};
 
@@ -79,10 +82,8 @@ public:
         std::string name;
 
     public:
-        ScopedTimerProbeGuard() = default;
-        ScopedTimerProbeGuard(Timer& stats_ref, std::string timer_name, int loglevel)
-            : stats((loglevel <= stats_ref.getLogLevel()) ? &stats_ref : nullptr)
-            , name(std::move(timer_name))
+        ScopedTimerProbeGuard(Timer& stats_ref, std::string_view timer_name, int loglevel)
+            : stats((loglevel <= stats_ref.getLogLevel()) ? &stats_ref : nullptr), name(timer_name)
         {
             if(stats) {
                 stats->pushTimerProbe(name, loglevel);
@@ -99,7 +100,7 @@ public:
         ScopedTimerProbeGuard& operator=(const ScopedTimerProbeGuard&) = delete;
         // Move constructor and move assignment operator to allow moving of the guard.
         ScopedTimerProbeGuard(ScopedTimerProbeGuard&& other) noexcept
-            : stats(other.stats), name(std::move(other.name))
+            : stats(other.stats), name(other.name)
         {
             other.stats = nullptr;
         }
@@ -121,7 +122,7 @@ public:
     // Creates a scoped timer probe guard that starts the timer probe with the given name
     // and log level when it is created and stops the timer probe when it goes out of scope.
     [[nodiscard]] inline ScopedTimerProbeGuard
-    scopedTimerProbe(const std::string& name, int loglevel = 0)
+    scopedTimerProbe(const std::string_view name, int loglevel = 0)
     {
         return ScopedTimerProbeGuard(*this, name, loglevel);
     }
@@ -131,26 +132,26 @@ public:
     // If a timer probe with the same name already exists, that timer probe will be restarted.
     // If tracing is enabled a trace with the same name will also be pushed to the ProfilerSingleton
     // instance.
-    void pushTimerProbe(const std::string& name, int loglevel = 0);
+    void pushTimerProbe(std::string_view name, int loglevel = 0);
     // Stops the timer probe with the given name.
     // If the timer probe does not exist, this function does nothing.
     // Upon stopping the timer probe, the duration of the timer entry is updated with the time
     // elapsed since it was started.
     // If tracing is enabled a trace with the same name will also be poped from the
     // ProfilerSingleton instance.
-    void popTimerProbe(const std::string& name);
+    void popTimerProbe(const std::string_view name);
     // Returns the duration of the timer entry in microseconds. If the timer is still running, it
     // returns the duration until now. if the timer entry does not exist, it returns 0.
-    uint64_t getTimerEntry(const std::string& name) const;
+    duration_type getDuration(const std::string_view name) const;
     // Returns a formatted report of timer entries.
-    std::string printTimerEntries() const;
+    std::string formatTimerEntries() const;
     // Returns a map of timer entry names to their durations in microseconds.
     // If a timer is still running, it returns the duration until now.
     // If a timer entry does not exist, it is not included in the map.
     // PST: I choose a map here so that we always have the same order of entries when printing them.
-    std::map<std::string, uint64_t> getTimerEntries() const
+    std::map<std::string, duration_type> getDurations() const
     {
-        std::map<std::string, uint64_t> entries;
+        std::map<std::string, duration_type> entries;
         for(const auto& [name, trace] : timer_map) {
             entries.emplace(name, trace.getDurationInMicroseconds());
         }
@@ -158,7 +159,7 @@ public:
     }
     // Sets the log level for the timer. Timer probes with a log level higher than the set log
     // level will not be active and will not record time.
-    void setLogLevel(int level) { log_level = level; };
+    void setLogLevel(int level) { max_log_level = level; };
     // Returns the current log level of the timer.
-    int getLogLevel() const { return log_level; };
+    int getLogLevel() const { return max_log_level; };
 };

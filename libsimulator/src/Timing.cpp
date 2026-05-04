@@ -11,8 +11,6 @@
 
 namespace cr = std::chrono;
 
-// Implementation of TimerEntry class
-// Move constructor.
 TimerEntry::TimerEntry(TimerEntry&& other) noexcept
     : started_at(std::move(other.started_at))
     , duration_in_microseconds(other.duration_in_microseconds)
@@ -22,7 +20,6 @@ TimerEntry::TimerEntry(TimerEntry&& other) noexcept
     other.running = false;
 }
 
-// Move assignment operator.
 TimerEntry& TimerEntry::operator=(TimerEntry&& other) noexcept
 {
     if(this != &other) {
@@ -35,26 +32,6 @@ TimerEntry& TimerEntry::operator=(TimerEntry&& other) noexcept
     return *this;
 }
 
-// Copy constructor.
-TimerEntry::TimerEntry(const TimerEntry& other)
-    : started_at(other.started_at)
-    , duration_in_microseconds(other.duration_in_microseconds)
-    , running(other.running)
-{
-}
-
-// Copy assignment operator.
-TimerEntry& TimerEntry::operator=(const TimerEntry& other)
-{
-    if(this != &other) {
-        started_at = other.started_at;
-        duration_in_microseconds = other.duration_in_microseconds;
-        running = other.running;
-    }
-    return *this;
-}
-
-// Start the timer entry. If the timer entry is already running, this function does nothing.
 void TimerEntry::start()
 {
     if(!running) {
@@ -63,9 +40,6 @@ void TimerEntry::start()
     }
 }
 
-// Stop the timer entry. If the timer entry is not running, this function does nothing.
-// Upon stopping the timer entry, the duration of the timer entry is updated with the time elapsed
-// since it was started.
 void TimerEntry::stop()
 {
     if(running) {
@@ -76,8 +50,6 @@ void TimerEntry::stop()
     }
 }
 
-// Get the duration of the timer entry in microseconds. If the timer is still running, it returns
-// the duration until now. If the timer entry does not exist, it returns 0.
 uint64_t TimerEntry::getDurationInMicroseconds() const
 {
     if(running) {
@@ -89,17 +61,16 @@ uint64_t TimerEntry::getDurationInMicroseconds() const
     return duration_in_microseconds;
 }
 
-// Push a timer probe with the given name and log level.
-// If the log level of the timer probe is higher than the log level set in the Timer object,
-void Timer::pushTimerProbe(const std::string& name, int loglevel)
+void Timer::pushTimerProbe(std::string_view name, int timer_probe_level)
 {
-    if(loglevel > log_level) {
+    if(timer_probe_level > max_log_level) {
         return;
     }
-    auto iter = timer_map.find(name);
+    std::string name_str(name);
+    auto iter = timer_map.find(name_str);
     // use emplace to avoid multiple lookups and unnecessary default construction of TimerEntry
     if(iter == timer_map.end()) {
-        timer_map.emplace(name, TimerEntry()).first->second.start();
+        timer_map.emplace(name_str, TimerEntry()).first->second.start();
     } else {
         iter->second.start();
     }
@@ -110,21 +81,21 @@ void Timer::pushTimerProbe(const std::string& name, int loglevel)
     }
 }
 
-void Timer::popTimerProbe(const std::string& name)
+void Timer::popTimerProbe(const std::string_view name)
 {
     // use auto iter = timer_map.find(name) to avoid multiple lookups
-    auto iter = timer_map.find(name);
+    auto iter = timer_map.find(std::string(name));
     if(iter != timer_map.end()) {
         iter->second.stop();
     }
-    // if tracing is enabled a trace with the same name will also be poped from the
+    // if tracing is enabled the last entry form the stack will also be popped from the
     // ProfilerSingleton instance.
     if(ProfilerSingleton::instance().isEnabled()) {
         ProfilerSingleton::instance().popProbe();
     }
 }
 
-std::string Timer::printTimerEntries() const
+std::string Timer::formatTimerEntries() const
 {
     std::string message;
     message += "\n";
@@ -156,11 +127,9 @@ std::string Timer::printTimerEntries() const
     return message;
 }
 
-// get a single Timer entry by name. If the timer is still running, it returns the duration until
-// now. If the timer entry does not exist, it returns 0.
-uint64_t Timer::getTimerEntry(const std::string& name) const
+uint64_t Timer::getDuration(const std::string_view name) const
 {
-    auto iter = timer_map.find(name);
+    auto iter = timer_map.find(std::string(name));
     if(iter != timer_map.end()) {
         return iter->second.getDurationInMicroseconds();
     }

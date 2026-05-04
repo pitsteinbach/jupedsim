@@ -39,7 +39,7 @@ public:
     public:
         ScopedProbeGuard() = default;
 
-        ScopedProbeGuard(ProfilerSingleton* const profiler, const std::string& name)
+        ScopedProbeGuard(ProfilerSingleton* const profiler, const std::string_view name)
             : profiler(profiler)
         {
             if(this->profiler) {
@@ -61,9 +61,6 @@ public:
         ScopedProbeGuard& operator=(ScopedProbeGuard&& other) noexcept
         {
             if(this != &other) {
-                if(profiler) {
-                    profiler->popProbe();
-                }
                 profiler = other.profiler;
                 other.profiler = nullptr;
             }
@@ -75,14 +72,14 @@ public:
 
     void enable();
     void disable();
-    void pushProbe(const std::string& name);
+    void pushProbe(const std::string_view name);
     void popProbe();
-    [[nodiscard]] inline ScopedProbeGuard scopedProbe(const std::string& name)
+    [[nodiscard]] inline ScopedProbeGuard scopedProbe(const std::string_view name)
     {
         return ScopedProbeGuard(this, name);
     }
 
-    void dump(const std::string& filename);
+    void dumpAndReset(const std::string& filename);
     inline bool isEnabled() const { return enabled; }
 
 private:

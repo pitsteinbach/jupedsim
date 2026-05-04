@@ -63,7 +63,6 @@ public:
     ~Simulation() = default;
     const SimulationClock& Clock() const;
     void SetTracing(bool on);
-    Timer GetLastTimer() const;
     void Iterate();
     Journey::ID AddJourney(const std::map<BaseStage::ID, TransitionDescription>& stages);
     BaseStage::ID AddStage(const StageDescription stageDescription);
@@ -87,9 +86,17 @@ public:
     StageProxy Stage(BaseStage::ID stageId);
     CollisionGeometry Geo() const;
     void SwitchGeometry(std::unique_ptr<CollisionGeometry>&& geometry);
-    void PushTimer(const std::string& name);
-    void PopTimer(const std::string& name);
-    void SetLogLevelTimer(int level) { _timer.setLogLevel(level); };
+    void PushTimer(const std::string_view name, size_t probe_log_level = 0);
+    void PopTimer(const std::string_view name);
+    void SetTimerLogLevel(int level) { _timer.setLogLevel(level); };
+    duration_type GetTimerDuration(const std::string_view name) const
+    {
+        return _timer.getDuration(name);
+    };
+    std::map<std::string, duration_type> GetTimerDurations() const
+    {
+        return _timer.getDurations();
+    };
 
 private:
     void ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geometry) const;

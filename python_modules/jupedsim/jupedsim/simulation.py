@@ -69,7 +69,7 @@ class Simulation:
         ),
         dt: float = 0.01,
         trajectory_writer: TrajectoryWriter | None = None,
-        log_level_timer: int = 1,
+        timer_log_level: int = 1,
         **kwargs: Any,
     ) -> None:
         """Creates a Simulation.
@@ -143,9 +143,7 @@ class Simulation:
         self._obj = py_jps.Simulation(
             model=py_jps_model, geometry=build_geometry(geometry)._obj, dt=dt
         )
-        self._timer = None
-        self._obj.push_timer("Total Simulation Time")
-        self._obj.set_log_level_timer(log_level_timer)
+        self._timer = Timer(self._obj, timer_log_level=timer_log_level)
 
     def add_waypoint_stage(
         self, position: tuple[float, float], distance
@@ -566,7 +564,4 @@ class Simulation:
         Returns:
             Timer object.
         """
-        if self._timer is None:
-            self._timer = Timer(self._obj.get_last_timer())
-        self._timer.set_timer_instance(self._obj.get_last_timer())
         return self._timer

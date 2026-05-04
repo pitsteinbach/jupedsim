@@ -88,13 +88,12 @@ void ProfilerSingleton::disable()
     enabled = false;
 }
 
-void ProfilerSingleton::pushProbe(const std::string& name)
+void ProfilerSingleton::pushProbe(const std::string_view name)
 {
     if(!enabled) {
         return;
     }
-
-    TRACE_EVENT_BEGIN("main", perfetto::DynamicString{name.c_str()});
+    TRACE_EVENT_BEGIN("main", perfetto::DynamicString{name.cbegin()});
 }
 
 void ProfilerSingleton::popProbe()
@@ -106,7 +105,7 @@ void ProfilerSingleton::popProbe()
     TRACE_EVENT_END("main");
 }
 
-void ProfilerSingleton::dump(const std::string& filename)
+void ProfilerSingleton::dumpAndReset(const std::string& filename)
 {
     writeAndResetSession(filename);
     enabled = false;

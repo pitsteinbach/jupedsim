@@ -66,11 +66,6 @@ void Simulation::SetTracing(bool status)
     }
 };
 
-Timer Simulation::GetLastTimer() const
-{
-    return _timer;
-};
-
 void Simulation::Iterate()
 {
     // LOG_DEBUG("Iteration {} / Time {}s", _clock.Iteration(), _clock.ElapsedTime());
@@ -93,12 +88,12 @@ void Simulation::Iterate()
     }
 
     {
-        JPS_SCOPED_TIMER(_timer, "Stategical Decision System", Detailed);
+        JPS_SCOPED_TIMER(_timer, "Strategical Decision System", General);
         _stategicalDecisionSystem.Run(_journeys, _agents, _stageManager);
     }
 
     {
-        JPS_SCOPED_TIMER(_timer, "Tactical Decision System", Detailed);
+        JPS_SCOPED_TIMER(_timer, "Tactical Decision System", General);
         _tacticalDecisionSystem.Run(*_routingEngine, _agents);
     }
 
@@ -473,12 +468,12 @@ void Simulation::ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geom
     }
 }
 
-void Simulation::PushTimer(const std::string& name)
+void Simulation::PushTimer(const std::string_view name, size_t probe_log_level)
 {
-    _timer.pushTimerProbe(name, 0);
+    _timer.pushTimerProbe(name, probe_log_level);
 }
 
-void Simulation::PopTimer(const std::string& name)
+void Simulation::PopTimer(const std::string_view name)
 {
     _timer.popTimerProbe(name);
 }
