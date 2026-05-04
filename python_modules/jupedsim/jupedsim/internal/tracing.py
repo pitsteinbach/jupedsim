@@ -16,10 +16,9 @@ class Timer:
         self._timer_dict = None
         self._prev_iteration_time = 0
         self._prev_op_dec_time = 0
-        pass
 
     def __repr__(self) -> str:
-        """Prints the timer entries to the console. By default only the contributions with more than 0.01% are printed."""
+        """Prints the timer entries to the console. Only the contributions with more than 0.01% are printed."""
         # even if the timer has been stopped this should not change things
         self._obj.pop_timer("Total Simulation Time")
         timer_dict = self._obj.get_durations()
@@ -47,14 +46,15 @@ class Timer:
         """
         return self._obj.get_duration(key)
 
-    def push_timer(self, name: str) -> None:
+    def push_timer(self, name: str, probe_log_level: int = 0) -> None:
         """
         Pushes a timer with the given name. The timer will be stopped when the corresponding pop_timer is called.
 
         Args:
             name: Name of the timer to be pushed.
+            probe_log_level: Log level for the probe.
         """
-        self._obj.push_timer(name)
+        self._obj.push_timer(name, probe_log_level)
 
     def pop_timer(self, name: str) -> None:
         """
@@ -97,9 +97,6 @@ class Timer:
             timer_object: Timer object to be used for tracing.
         """
         self._obj = timer_object
-
-    def __str__(self) -> str:
-        return self.__repr__()
 
 
 class Profiler:

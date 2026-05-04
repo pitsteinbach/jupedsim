@@ -1,4 +1,7 @@
+import time
+
 import pytest
+from jupedsim.models.collision_free_speed import CollisionFreeSpeedModel
 
 
 def test_timer_integration_small_simulation(tmp_path):
@@ -8,12 +11,9 @@ def test_timer_integration_small_simulation(tmp_path):
     """
     # Build a Simulation with a real model to access the C++-backed Simulation object
     try:
-        from jupedsim.models.collision_free_speed import (
-            CollisionFreeSpeedModel,
-        )
         from jupedsim.simulation import Simulation
     except Exception:
-        pytest.skip("jupedsim python bindings not importable or models missing")
+        pytest.fail("jupedsim python bindings not importable or models missing")
 
     # Minimal geometry: small square
     geom = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
@@ -23,15 +23,11 @@ def test_timer_integration_small_simulation(tmp_path):
     timer = sim.get_last_timer()
 
     # Ensure the pybind Simulation exposes timer methods
-    if not (
-        hasattr(timer, "push_timer")
-        and hasattr(timer, "pop_timer")
-        and hasattr(timer, "elapsed_time_us")
-    ):
-        pytest.skip("py_jps.Simulation missing required timer methods")
+    assert hasattr(timer, "push_timer")
+    assert hasattr(timer, "pop_timer")
+    assert hasattr(timer, "elapsed_time_us")
 
     timer.push_timer("integration_test")
-    import time
 
     time.sleep(0.001)
     timer.pop_timer("integration_test")
@@ -54,12 +50,12 @@ def test_profiler_integration_with_cpp_extension(tmp_path):
     try:
         import jupedsim.internal.tracing as tracing
     except Exception:
-        pytest.skip("jupedsim.native extension not importable")
+        pytest.fail("jupedsim.native extension not importable")
 
     try:
         profiler = tracing.Profiler()
     except Exception:
-        pytest.skip("py_jps.Trace.instance() not available")
+        pytest.fail("py_jps.Trace.instance() not available")
 
     # Ensure basic methods exist
     required = [
@@ -70,7 +66,7 @@ def test_profiler_integration_with_cpp_extension(tmp_path):
         "dump_and_reset",
     ]
     if not all(hasattr(profiler, m) for m in required):
-        pytest.skip(
+        pytest.fail(
             "py_jps.Profiler missing required methods for integration test"
         )
 
@@ -80,7 +76,6 @@ def test_profiler_integration_with_cpp_extension(tmp_path):
 
     # push/pop probes
     profiler.push_probe("integration_probe")
-    import time
 
     time.sleep(0.001)
     profiler.pop_probe()

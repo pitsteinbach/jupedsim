@@ -533,9 +533,6 @@ class Simulation:
     def set_tracing(self, status: bool) -> None:
         self._obj.set_tracing(status)
 
-    def get_last_timer(self) -> Timer:
-        return self.timer
-
     def get_geometry(self) -> Geometry:
         """Current geometry of the simulation.
 

@@ -72,8 +72,18 @@ public:
 
     void enable();
     void disable();
-    void pushProbe(const std::string_view name);
-    void popProbe();
+    inline void pushProbe(const std::string_view name)
+    {
+        if(enabled) {
+            TRACE_EVENT_BEGIN("main", perfetto::DynamicString{name.data()});
+        }
+    }
+    inline void popProbe()
+    {
+        if(enabled) {
+            TRACE_EVENT_END("main");
+        }
+    }
     [[nodiscard]] inline ScopedProbeGuard scopedProbe(const std::string_view name)
     {
         return ScopedProbeGuard(this, name);

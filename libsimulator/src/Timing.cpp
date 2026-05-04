@@ -95,38 +95,6 @@ void Timer::popTimerProbe(const std::string_view name)
     }
 }
 
-std::string Timer::formatTimerEntries() const
-{
-    std::string message;
-    message += "\n";
-    message += "Timer Entries:\n";
-    message += "-----------------------------------------------------\n";
-
-    const auto total_iter = timer_map.find("Total Iteration");
-    const uint64_t total_iteration_duration =
-        (total_iter != timer_map.end()) ? total_iter->second.getDurationInMicroseconds() : 0;
-
-    for(const auto& [name, trace] : timer_map) {
-        if(name != "Total Iteration") {
-            const float percentage = total_iteration_duration > 0 ?
-                                         (static_cast<float>(trace.getDurationInMicroseconds()) /
-                                          total_iteration_duration) *
-                                             100.0f :
-                                         0.0f;
-            const auto duration_seconds =
-                static_cast<double>(trace.getDurationInMicroseconds()) / 1000000.0;
-            message +=
-                fmt::format("{:<30}|{:8.2f} s ({:5.2f}%)\n", name, duration_seconds, percentage);
-            continue;
-        }
-    }
-
-    const auto total_seconds = static_cast<double>(total_iteration_duration) / 1000000.0;
-    message += "-----------------------------------------------------\n";
-    message += fmt::format("{:<30}|{:8.2f} s (100.00%)\n", "Total Simulation Time", total_seconds);
-    return message;
-}
-
 uint64_t Timer::getDuration(const std::string_view name) const
 {
     auto iter = timer_map.find(std::string(name));
@@ -134,4 +102,13 @@ uint64_t Timer::getDuration(const std::string_view name) const
         return iter->second.getDurationInMicroseconds();
     }
     return 0;
+}
+
+std::map<std::string, duration_type> Timer::getDurations() const
+{
+    std::map<std::string, duration_type> entries;
+    for(const auto& [name, trace] : timer_map) {
+        entries.emplace(name, trace.getDurationInMicroseconds());
+    }
+    return entries;
 }

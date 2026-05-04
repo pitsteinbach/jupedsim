@@ -143,20 +143,11 @@ public:
     // Returns the duration of the timer entry in microseconds. If the timer is still running, it
     // returns the duration until now. if the timer entry does not exist, it returns 0.
     duration_type getDuration(const std::string_view name) const;
-    // Returns a formatted report of timer entries.
-    std::string formatTimerEntries() const;
     // Returns a map of timer entry names to their durations in microseconds.
     // If a timer is still running, it returns the duration until now.
     // If a timer entry does not exist, it is not included in the map.
     // PST: I choose a map here so that we always have the same order of entries when printing them.
-    std::map<std::string, duration_type> getDurations() const
-    {
-        std::map<std::string, duration_type> entries;
-        for(const auto& [name, trace] : timer_map) {
-            entries.emplace(name, trace.getDurationInMicroseconds());
-        }
-        return entries;
-    }
+    std::map<std::string, duration_type> getDurations() const;
     // Sets the log level for the timer. Timer probes with a log level higher than the set log
     // level will not be active and will not record time.
     void setLogLevel(int level) { max_log_level = level; };
