@@ -478,12 +478,12 @@ void Simulation::PopTimer(const std::string_view name)
     _timer.popTimerProbe(name);
 }
 
-duration_type Simulation::GetTimerDuration(const std::string_view name) const
+TimerEntry::duration_type Simulation::GetTimerDuration(const std::string_view name) const
 {
     return _timer.getDuration(name);
 }
 
-std::map<std::string, duration_type> Simulation::GetTimerDurations() const
+std::map<std::string, TimerEntry::duration_type> Simulation::GetTimerDurations() const
 {
     return _timer.getDurations();
 }

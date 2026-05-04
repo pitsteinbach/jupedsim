@@ -95,7 +95,7 @@ void Timer::popTimerProbe(const std::string_view name)
     }
 }
 
-uint64_t Timer::getDuration(const std::string_view name) const
+TimerEntry::duration_type Timer::getDuration(const std::string_view name) const
 {
     auto iter = timer_map.find(std::string(name));
     if(iter != timer_map.end()) {
@@ -104,9 +104,9 @@ uint64_t Timer::getDuration(const std::string_view name) const
     return 0;
 }
 
-std::map<std::string, duration_type> Timer::getDurations() const
+std::map<std::string, TimerEntry::duration_type> Timer::getDurations() const
 {
-    std::map<std::string, duration_type> entries;
+    std::map<std::string, TimerEntry::duration_type> entries;
     for(const auto& [name, trace] : timer_map) {
         entries.emplace(name, trace.getDurationInMicroseconds());
     }

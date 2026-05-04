@@ -89,8 +89,8 @@ public:
     void PushTimer(const std::string_view name, size_t probe_log_level = 0);
     void PopTimer(const std::string_view name);
     void SetTimerLogLevel(int level) { _timer.setLogLevel(level); };
-    duration_type GetTimerDuration(const std::string_view name) const;
-    std::map<std::string, duration_type> GetTimerDurations() const;
+    TimerEntry::duration_type GetTimerDuration(const std::string_view name) const;
+    std::map<std::string, TimerEntry::duration_type> GetTimerDurations() const;
 
 private:
     void ValidateGeometry(const std::unique_ptr<CollisionGeometry>& geometry) const;

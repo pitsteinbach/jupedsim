@@ -24,23 +24,16 @@
         (timer_obj).scopedTimerProbe((name), (loglevel))
 #endif
 
-using duration_type = uint64_t;
-
 // Helper class to store the start time and duration of a timer entry.
 // It also has a flag to indicate whether the timer is currently running or not.
 // The duration is summed, hence multiple calls to start and stop will accumulate the duration in
 // microseconds.
 class TimerEntry
 {
-    // Last start time of the timer entry.
-    std::chrono::high_resolution_clock::time_point started_at;
-    // Duration of the timer entry in microseconds.
-    // It is updated with the time elapsed since the last start time when the timer is stopped.
-    duration_type duration_in_microseconds{0};
-    // Flag to indicate whether the timer is currently running or not.
-    bool running{false};
 
 public:
+    using duration_type = uint64_t;
+
     TimerEntry() = default;
     ~TimerEntry() = default;
     TimerEntry(const TimerEntry& other) = delete;
@@ -56,7 +49,16 @@ public:
     // Get the duration of the timer entry in microseconds.
     // If the timer is still running, it returns the duration until now.
     // If the timer entry does not exist, it returns 0.
-    uint64_t getDurationInMicroseconds() const;
+    duration_type getDurationInMicroseconds() const;
+
+private:
+    // Last start time of the timer entry.
+    std::chrono::high_resolution_clock::time_point started_at;
+    // Duration of the timer entry in microseconds.
+    // It is updated with the time elapsed since the last start time when the timer is stopped.
+    duration_type duration_in_microseconds{0};
+    // Flag to indicate whether the timer is currently running or not.
+    bool running{false};
 };
 
 class Timer
@@ -142,12 +144,12 @@ public:
     void popTimerProbe(const std::string_view name);
     // Returns the duration of the timer entry in microseconds. If the timer is still running, it
     // returns the duration until now. if the timer entry does not exist, it returns 0.
-    duration_type getDuration(const std::string_view name) const;
+    TimerEntry::duration_type getDuration(const std::string_view name) const;
     // Returns a map of timer entry names to their durations in microseconds.
     // If a timer is still running, it returns the duration until now.
     // If a timer entry does not exist, it is not included in the map.
     // PST: I choose a map here so that we always have the same order of entries when printing them.
-    std::map<std::string, duration_type> getDurations() const;
+    std::map<std::string, TimerEntry::duration_type> getDurations() const;
     // Sets the log level for the timer. Timer probes with a log level higher than the set log
     // level will not be active and will not record time.
     void setLogLevel(int level) { max_log_level = level; };
