@@ -24,7 +24,6 @@ class CustomModelAgentUpdate:
 
     position: tuple[float, float] | None = None
     orientation: tuple[float, float] | None = None
-    model: Any | None = None
 
 
 @dataclass(kw_only=True)
@@ -42,7 +41,6 @@ class CustomModelAgentParameters:
     orientation: tuple[float, float] = (0.0, 0.0)
     journey_id: int = 0
     stage_id: int = 0
-    model: Any = None
 
 
 class CustomOperationalModel(ABC):
@@ -83,6 +81,7 @@ class CustomOperationalModel(ABC):
     ) -> CustomModelAgentUpdate:
         """Compute one update for ``ped``."""
 
+    @abstractmethod
     def check_model_constraint(
         self,
         ped: Agent,

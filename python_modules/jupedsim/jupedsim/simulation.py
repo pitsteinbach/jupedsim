@@ -388,7 +388,7 @@ class Simulation:
         elif isinstance(parameters, CustomModelAgentParameters) or issubclass(
             type(parameters), CustomModelAgentParameters
         ):
-            model = py_jps._CustomModelData(parameters.model)
+            model = py_jps._CustomModelData(parameters)
 
         agent = py_jps.Agent(
             journey_id=parameters.journey_id,

@@ -195,7 +195,7 @@ def main(
                 sys.exit(1)
 
         res_dict = {}
-
+        print(simulation.iteration_count())
         for key in timer_key_list:
             res_dict[key] = simulation.timer.elapsed_time_us(key)
         df_res = pd.concat(
@@ -208,8 +208,8 @@ if __name__ == "__main__":
     res = pd.DataFrame(columns=timer_key_list)
     res = main(
         df_res=res,
-        number_of_runs=50,
-        number_of_iterations=200,
-        number_of_agents=15000,
+        number_of_runs=5,
+        number_of_iterations=60000,
+        number_of_agents=10000,
     )
     res.to_csv("evac_shortest_path_deque_ptr_15k_flt.csv", index=False)

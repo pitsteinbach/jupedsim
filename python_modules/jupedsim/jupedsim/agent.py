@@ -134,6 +134,6 @@ class Agent:
         elif isinstance(model, py_jps.WarpDriverModelState):
             return WarpDriverModelState(model)
         elif isinstance(model, py_jps._CustomModelData):
-            return model.model
+            return model.py_object
         else:
             raise Exception("Internal error")

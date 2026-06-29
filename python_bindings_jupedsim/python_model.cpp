@@ -141,7 +141,7 @@ OperationalModelUpdate PythonModel::ComputeNewPosition(
         const_cast<NeighborhoodSearch<GenericAgent>*>(&neighborhoodSearch),
         py::return_value_policy::reference);
 
-    py::object update = _model.attr("compute_new_position")(
+    py::object update = _model.attr("_compute_new_position")(
         dT, pythonAgent, pythonGeometry, pythonNeighborhoodSearch);
 
     return CustomModelUpdate{GilSafePyObject{std::move(update)}};
@@ -154,11 +154,7 @@ void PythonModel::ApplyUpdate(const OperationalModelUpdate& update, GenericAgent
     const auto& pythonUpdate = std::get<CustomModelUpdate>(update).Get<GilSafePyObject>().Get();
 
     agent.pos = requiredPosition(pythonUpdate);
-
-    auto model = requireAttribute(pythonUpdate, "model");
-    if(model.is_none()) {
-        throw SimulationError("PythonModelData may not a python  'None'");
-    }
+    auto& model = std::get<CustomModelData>(agent.model).Get<GilSafePyObject>().Get();
     if(!py::hasattr(pythonUpdate, "__dict__")) {
         throw SimulationError("TODO");
     }
@@ -193,12 +189,12 @@ void init_python_model(py::module_& m)
 {
     py::class_<OperationalModel, py::smart_holder>(m, "_OperationalModel");
 
-    // py::class_<CustomModelData>(m, "_CustomModelData")
-    //     .def(py::init([](py::object model) {
-    //         return CustomModelData{GilSafePyObject{std::move(model)}};
-    //     }))
-    //     .def_property_readonly(
-    //         "model", [](CustomModelData& data) { return data.Get<GilSafePyObject>().Get(); });
+    py::class_<CustomModelData>(m, "_CustomModelData")
+        .def(py::init([](py::object model) {
+            return CustomModelData{GilSafePyObject{std::move(model)}};
+        }))
+        .def_property_readonly(
+            "py_object", [](CustomModelData& data) { return data.Get<GilSafePyObject>().Get(); });
 
     py::class_<PythonModel, OperationalModel, py::smart_holder>(m, "_PythonModel")
         .def(py::init<py::object>(), py::arg("model"));
