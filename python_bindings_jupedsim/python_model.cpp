@@ -6,7 +6,6 @@
 #include "NeighborhoodSearch.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModels/CustomModel/CustomModelData.hpp"
-#include "OperationalModels/CustomModel/CustomModelUpdate.hpp"
 #include "SimulationError.hpp"
 #include "conversion.hpp"
 
@@ -86,32 +85,27 @@ PythonModel::PythonModel(py::object model) : _model(std::move(model))
     }
 }
 
-OperationalModelUpdate PythonModel::ComputeNewPosition(
+void PythonModel::ComputeNext(
     double dT,
-    const GenericAgent& agent,
+    const GenericAgent& current,
+    GenericAgent& next,
     const CollisionGeometry& geometry,
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
     py::gil_scoped_acquire gil;
 
-    py::object pythonAgent = py::cast(agent);
+    py::object pythonAgent = py::cast(current);
     py::object pythonGeometry = py::cast(&geometry, py::return_value_policy::reference);
     py::object pythonNeighborhoodSearch = py::cast(
         const_cast<NeighborhoodSearch<GenericAgent>*>(&neighborhoodSearch),
         py::return_value_policy::reference);
 
-    py::object update = _model.attr("_compute_new_position")(
+    py::object pythonUpdate = _model.attr("_compute_new_position")(
         dT, pythonAgent, pythonGeometry, pythonNeighborhoodSearch);
 
-    return CustomModelUpdate{GilSafePyObject{std::move(update)}};
-}
-
-void PythonModel::ApplyUpdate(const OperationalModelUpdate& update, GenericAgent& agent) const
-{
-    py::gil_scoped_acquire gil;
-
-    const auto& pythonUpdate = std::get<CustomModelUpdate>(update).Get<GilSafePyObject>().Get();
-    auto& customModelData = std::get<CustomModelData>(agent.model).Get<GilSafePyObject>();
+    // "next" shares the Python state object with "current" (GilSafePyObject copies are
+    // refcounted, not cloned), so this also rejects returning the current state instance.
+    auto& customModelData = std::get<CustomModelData>(next.model).Get<GilSafePyObject>();
     if(pythonUpdate.is(customModelData.Get())) {
         throw SimulationError(
             "Current and updated model state are the same instance. "
@@ -133,7 +127,7 @@ void PythonModel::ApplyUpdate(const OperationalModelUpdate& update, GenericAgent
     }
 
     try {
-        agent.pos = intoPoint(py::cast<std::tuple<double, double>>(attr));
+        next.pos = intoPoint(py::cast<std::tuple<double, double>>(attr));
     } catch(const py::cast_error&) {
         // Diagnostics run Python code on the offending object; they must not
         // be able to replace the error they describe.
