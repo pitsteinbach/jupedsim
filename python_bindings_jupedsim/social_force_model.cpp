@@ -2,7 +2,6 @@
 #include "OperationalModel.hpp"
 #include "SocialForceModel.hpp"
 #include "SocialForceModelBuilder.hpp"
-#include "SocialForceModelData.hpp"
 #include "conversion.hpp"
 
 #include <pybind11/cast.h>
@@ -19,8 +18,8 @@ void init_social_force_model(py::module_& m)
     py::class_<SocialForceModelBuilder>(m, "SocialForceModelBuilder")
         .def(py::init<double, double>(), py::kw_only(), py::arg("body_force"), py::arg("friction"))
         .def("build", &SocialForceModelBuilder::Build);
-    py::class_<SocialForceModelData>(m, "SocialForceModelState")
-        .def_static("_defaults", []() { return SocialForceModelData{}; })
+    py::class_<SocialForceModel::Agent>(m, "SocialForceModelState")
+        .def_static("_defaults", []() { return SocialForceModel::Agent{}; })
         .def(
             py::init([](std::tuple<double, double> velocity,
                         double mass,
@@ -30,7 +29,7 @@ void init_social_force_model(py::module_& m)
                         double obstacleScale,
                         double forceDistance,
                         double radius) {
-                return SocialForceModelData{
+                return SocialForceModel::Agent{
                     .velocity = intoPoint(velocity),
                     .mass = mass,
                     .desiredSpeed = desiredSpeed,
@@ -51,18 +50,20 @@ void init_social_force_model(py::module_& m)
             py::arg("radius"))
         .def_property_readonly(
             "orientation",
-            [](const SocialForceModelData& obj) { return intoTuple(obj.velocity.Normalized()); })
+            [](const SocialForceModel::Agent& obj) {
+                return intoTuple(obj.velocity.Normalized());
+            })
         .def_property(
             "velocity",
-            [](const SocialForceModelData& obj) { return intoTuple(obj.velocity); },
-            [](SocialForceModelData& obj, std::tuple<double, double> pt) {
+            [](const SocialForceModel::Agent& obj) { return intoTuple(obj.velocity); },
+            [](SocialForceModel::Agent& obj, std::tuple<double, double> pt) {
                 obj.velocity = intoPoint(pt);
             })
-        .def_readwrite("mass", &SocialForceModelData::mass)
-        .def_readwrite("desired_speed", &SocialForceModelData::desiredSpeed)
-        .def_readwrite("reaction_time", &SocialForceModelData::reactionTime)
-        .def_readwrite("agent_scale", &SocialForceModelData::agentScale)
-        .def_readwrite("obstacle_scale", &SocialForceModelData::obstacleScale)
-        .def_readwrite("force_distance", &SocialForceModelData::forceDistance)
-        .def_readwrite("radius", &SocialForceModelData::radius);
+        .def_readwrite("mass", &SocialForceModel::Agent::mass)
+        .def_readwrite("desired_speed", &SocialForceModel::Agent::desiredSpeed)
+        .def_readwrite("reaction_time", &SocialForceModel::Agent::reactionTime)
+        .def_readwrite("agent_scale", &SocialForceModel::Agent::agentScale)
+        .def_readwrite("obstacle_scale", &SocialForceModel::Agent::obstacleScale)
+        .def_readwrite("force_distance", &SocialForceModel::Agent::forceDistance)
+        .def_readwrite("radius", &SocialForceModel::Agent::radius);
 }

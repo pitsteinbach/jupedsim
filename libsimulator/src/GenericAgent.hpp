@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
-#include "AnticipationVelocityModelData.hpp"
-#include "CollisionFreeSpeedModelData.hpp"
-#include "CollisionFreeSpeedModelV2Data.hpp"
-#include "CollisionFreeSpeedModelV3Data.hpp"
-#include "GeneralizedCentrifugalForceModelData.hpp"
+#include "AnticipationVelocityModel.hpp"
+#include "CollisionFreeSpeedModel.hpp"
+#include "CollisionFreeSpeedModelV2.hpp"
+#include "CollisionFreeSpeedModelV3.hpp"
+#include "GeneralizedCentrifugalForceModel.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModels/CustomModel/CustomModelData.hpp"
 #include "OperationalModels/OperationalModelType.hpp"
 #include "Point.hpp"
-#include "SocialForceModelData.hpp"
+#include "SocialForceModel.hpp"
 #include "UniqueID.hpp"
 #include "Visitor.hpp"
-#include "WarpDriverModelData.hpp"
+#include "WarpDriver/WarpDriverModel.hpp"
 
 #include <fmt/core.h>
 
@@ -37,13 +37,13 @@ struct GenericAgent {
     Point pos{};
 
     using Model = std::variant<
-        GeneralizedCentrifugalForceModelData,
-        CollisionFreeSpeedModelData,
-        CollisionFreeSpeedModelV2Data,
-        CollisionFreeSpeedModelV3Data,
-        AnticipationVelocityModelData,
-        SocialForceModelData,
-        WarpDriverModelData,
+        GeneralizedCentrifugalForceModel::Agent,
+        CollisionFreeSpeedModel::Agent,
+        CollisionFreeSpeedModelV2::Agent,
+        CollisionFreeSpeedModelV3::Agent,
+        AnticipationVelocityModel::Agent,
+        SocialForceModel::Agent,
+        WarpDriverModel::Agent,
         CustomModelData>;
     Model model{};
 
@@ -70,23 +70,23 @@ inline OperationalModelType ModelTypeOf(const GenericAgent::Model& model)
 {
     return std::visit(
         overloaded{
-            [](const GeneralizedCentrifugalForceModelData&) {
+            [](const GeneralizedCentrifugalForceModel::Agent&) {
                 return OperationalModelType::GENERALIZED_CENTRIFUGAL_FORCE;
             },
-            [](const CollisionFreeSpeedModelData&) {
+            [](const CollisionFreeSpeedModel::Agent&) {
                 return OperationalModelType::COLLISION_FREE_SPEED;
             },
-            [](const CollisionFreeSpeedModelV2Data&) {
+            [](const CollisionFreeSpeedModelV2::Agent&) {
                 return OperationalModelType::COLLISION_FREE_SPEED_V2;
             },
-            [](const CollisionFreeSpeedModelV3Data&) {
+            [](const CollisionFreeSpeedModelV3::Agent&) {
                 return OperationalModelType::COLLISION_FREE_SPEED_V3;
             },
-            [](const AnticipationVelocityModelData&) {
+            [](const AnticipationVelocityModel::Agent&) {
                 return OperationalModelType::ANTICIPATION_VELOCITY_MODEL;
             },
-            [](const SocialForceModelData&) { return OperationalModelType::SOCIAL_FORCE; },
-            [](const WarpDriverModelData&) { return OperationalModelType::WARP_DRIVER; },
+            [](const SocialForceModel::Agent&) { return OperationalModelType::SOCIAL_FORCE; },
+            [](const WarpDriverModel::Agent&) { return OperationalModelType::WARP_DRIVER; },
             [](const CustomModelData&) { return OperationalModelType::CUSTOM_MODEL; }},
         model);
 }

@@ -2,19 +2,42 @@
 #pragma once
 #include "CollisionGeometry.hpp"
 #include "LineSegment.hpp"
-#include "NeighborhoodSearch.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
 
-struct GenericAgent;
+#include <fmt/core.h>
 
 class GeneralizedCentrifugalForceModel : public OperationalModel
 {
 public:
-    using NeighborhoodSearchType = NeighborhoodSearch<GenericAgent>;
+    /// Per-agent state of the generalized centrifugal force model.
+    struct Agent {
+        Point orientation{0.0, 0.0};
+        double speed{};
+        Point e0{};
+        int orientationDelay{};
+        double mass{1.0};
+        double tau{0.5};
+        double v0{1.2};
+        double Av{1.0};
+        double AMin{0.2};
+        double BMin{0.2};
+        double BMax{0.4};
+        // Configured simulation-wide via the builder; stamped into every agent
+        // by InitializeAgent, not settable per agent through the Python API.
+        double strengthNeighborRepulsion{0.3};
+        double strengthGeometryRepulsion{0.2};
+        double maxNeighborInteractionDistance{2};
+        double maxGeometryInteractionDistance{2};
+        double maxNeighborInterpolationDistance{0.1};
+        double maxGeometryInterpolationDistance{0.1};
+        double maxNeighborRepulsionForce{9};
+        double maxGeometryRepulsionForce{3};
+    };
 
 private:
+    double _cutOffRadius{4.0}; // TODO (MC) check this free parameter
     double strengthNeighborRepulsion;
     double strengthGeometryRepulsion;
     double maxNeighborInteractionDistance;
@@ -37,15 +60,16 @@ public:
     ~GeneralizedCentrifugalForceModel() override = default;
 
     OperationalModelType Type() const override;
+    void InitializeAgent(GenericAgent& agent) const override;
     void ComputeNext(
         double dT,
         const GenericAgent& current,
         GenericAgent& next,
         const CollisionGeometry& geometry,
-        const NeighborhoodSearchType& neighborhoodSearch) const override;
+        const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const override;
     void CheckModelConstraint(
         const GenericAgent& agent,
-        const NeighborhoodSearchType& neighborhoodSearch,
+        const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
         const CollisionGeometry& geometry) const override;
 
 private:
@@ -87,6 +111,7 @@ private:
     Point ForceRepWall(const GenericAgent& ped, const LineSegment& l) const;
     Point ForceRepStatPoint(const GenericAgent& ped, const Point& p, double l, double vn) const;
     Point ForceInterpolation(
+        const Agent& model,
         double v0,
         double K_ij,
         const Point& e,
@@ -95,4 +120,16 @@ private:
         double r,
         double l) const;
     double AgentToAgentSpacing(const GenericAgent& agent, const GenericAgent& otherAgent) const;
+};
+
+template <>
+struct fmt::formatter<GeneralizedCentrifugalForceModel::Agent> {
+
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const GeneralizedCentrifugalForceModel::Agent& m, FormatContext& ctx) const
+    {
+        return fmt::format_to(ctx.out(), "GCFM[orientation={}, speed={}])", m.orientation, m.speed);
+    }
 };

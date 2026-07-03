@@ -3,32 +3,48 @@
 
 #include "CollisionGeometry.hpp"
 #include "LineSegment.hpp"
-#include "NeighborhoodSearch.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
+
+#include <fmt/core.h>
 
 #include <cstdint>
 #include <random>
 #include <vector>
 
-struct GenericAgent;
-
 class AnticipationVelocityModel : public OperationalModel
 {
 public:
-    using NeighborhoodSearchType = NeighborhoodSearch<GenericAgent>;
+    /// Per-agent state of the anticipation velocity model.
+    struct Agent {
+        Point orientation{0.0, 0.0};
+        double strengthNeighborRepulsion{8.0};
+        double rangeNeighborRepulsion{0.1};
+        double wallBufferDistance{0.1}; // buff distance of agent to wall
+        double anticipationTime{1.0}; // anticipation time
+        double reactionTime{0.3}; // reaction time to update direction
+        Point velocity{};
+        double timeGap{1.06};
+        double v0{1.2};
+        double radius{0.2};
+        // Configured simulation-wide via the builder; stamped into every agent
+        // by InitializeAgent, not settable per agent through the Python API.
+        /// Add a small outward component to maintain minimum distance from walls.
+        double pushoutStrength{0.3};
+    };
 
 private:
     double _cutOffRadius{3};
-    /// Add a small outward component to maintain minimum distance from walls.
     double _pushoutStrength;
+    // Shared sequential RNG: draws must stay on the model to keep simulations deterministic.
     mutable std::mt19937 gen;
 
 public:
     AnticipationVelocityModel(double pushoutStrength, uint64_t rng_seed);
     ~AnticipationVelocityModel() override = default;
     OperationalModelType Type() const override;
+    void InitializeAgent(GenericAgent& agent) const override;
     void ComputeNext(
         double dT,
         const GenericAgent& current,
@@ -37,7 +53,7 @@ public:
         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const override;
     void CheckModelConstraint(
         const GenericAgent& agent,
-        const NeighborhoodSearchType& neighborhoodSearch,
+        const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
         const CollisionGeometry& geometry) const override;
 
 private:
@@ -54,8 +70,35 @@ private:
         const Point& agentPosition,
         double agentRadius,
         const std::vector<LineSegment>& boundary,
-        double wallBufferDistance) const;
+        double wallBufferDistance,
+        double pushoutStrength) const;
 
     Point
     UpdateDirection(const GenericAgent& ped, const Point& calculatedDirection, double dt) const;
+};
+
+template <>
+struct fmt::formatter<AnticipationVelocityModel::Agent> {
+
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const AnticipationVelocityModel::Agent& m, FormatContext& ctx) const
+    {
+        return fmt::format_to(
+            ctx.out(),
+            "AnticipationVelocityModel[orientation={}, strengthNeighborRepulsion={}, "
+            "rangeNeighborRepulsion={}, wallBufferDistance={}, "
+            "timeGap={}, v0={}, radius={}, reactionTime={}, anticipationTime={}, velocity={}])",
+            m.orientation,
+            m.strengthNeighborRepulsion,
+            m.rangeNeighborRepulsion,
+            m.wallBufferDistance,
+            m.timeGap,
+            m.v0,
+            m.radius,
+            m.reactionTime,
+            m.anticipationTime,
+            m.velocity);
+    }
 };

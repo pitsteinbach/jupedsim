@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "AnticipationVelocityModel.hpp"
 #include "AnticipationVelocityModelBuilder.hpp"
-#include "AnticipationVelocityModelData.hpp"
 #include "OperationalModel.hpp"
 #include "conversion.hpp"
 #include "type_casters.hpp" // IWYU pragma: keep
@@ -23,8 +22,8 @@ void init_anticipation_velocity_model(py::module_& m)
             py::arg("pushout_strength"),
             py::arg("rng_seed"))
         .def("build", &AnticipationVelocityModelBuilder::Build);
-    py::class_<AnticipationVelocityModelData>(m, "AnticipationVelocityModelState")
-        .def_static("_defaults", []() { return AnticipationVelocityModelData{}; })
+    py::class_<AnticipationVelocityModel::Agent>(m, "AnticipationVelocityModelState")
+        .def_static("_defaults", []() { return AnticipationVelocityModel::Agent{}; })
         .def(
             py::init([](std::tuple<double, double> orientation,
                         double strengthNeighborRepulsion,
@@ -35,7 +34,7 @@ void init_anticipation_velocity_model(py::module_& m)
                         double timeGap,
                         double desiredSpeed,
                         double radius) {
-                return AnticipationVelocityModelData{
+                return AnticipationVelocityModel::Agent{
                     .orientation = intoPoint(orientation),
                     .strengthNeighborRepulsion = strengthNeighborRepulsion,
                     .rangeNeighborRepulsion = rangeNeighborRepulsion,
@@ -56,17 +55,18 @@ void init_anticipation_velocity_model(py::module_& m)
             py::arg("time_gap"),
             py::arg("desired_speed"),
             py::arg("radius"))
-        .def_readwrite("orientation", &AnticipationVelocityModelData::orientation)
+        .def_readwrite("orientation", &AnticipationVelocityModel::Agent::orientation)
         .def_readwrite(
             "strength_neighbor_repulsion",
-            &AnticipationVelocityModelData::strengthNeighborRepulsion)
+            &AnticipationVelocityModel::Agent::strengthNeighborRepulsion)
         .def_readwrite(
-            "range_neighbor_repulsion", &AnticipationVelocityModelData::rangeNeighborRepulsion)
-        .def_readwrite("wall_buffer_distance", &AnticipationVelocityModelData::wallBufferDistance)
-        .def_readwrite("anticipation_time", &AnticipationVelocityModelData::anticipationTime)
-        .def_readwrite("reaction_time", &AnticipationVelocityModelData::reactionTime)
-        .def_readwrite("velocity", &AnticipationVelocityModelData::velocity)
-        .def_readwrite("time_gap", &AnticipationVelocityModelData::timeGap)
-        .def_readwrite("desired_speed", &AnticipationVelocityModelData::v0)
-        .def_readwrite("radius", &AnticipationVelocityModelData::radius);
+            "range_neighbor_repulsion", &AnticipationVelocityModel::Agent::rangeNeighborRepulsion)
+        .def_readwrite(
+            "wall_buffer_distance", &AnticipationVelocityModel::Agent::wallBufferDistance)
+        .def_readwrite("anticipation_time", &AnticipationVelocityModel::Agent::anticipationTime)
+        .def_readwrite("reaction_time", &AnticipationVelocityModel::Agent::reactionTime)
+        .def_readwrite("velocity", &AnticipationVelocityModel::Agent::velocity)
+        .def_readwrite("time_gap", &AnticipationVelocityModel::Agent::timeGap)
+        .def_readwrite("desired_speed", &AnticipationVelocityModel::Agent::v0)
+        .def_readwrite("radius", &AnticipationVelocityModel::Agent::radius);
 }

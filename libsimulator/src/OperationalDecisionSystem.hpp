@@ -47,6 +47,8 @@ public:
         std::copy(std::begin(_next), std::end(_next), std::begin(agents));
     }
 
+    void InitializeAgent(GenericAgent& agent) const { _model->InitializeAgent(agent); }
+
     void ValidateAgent(
         const GenericAgent& agent,
         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,

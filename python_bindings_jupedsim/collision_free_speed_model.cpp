@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "CollisionFreeSpeedModel.hpp"
 #include "CollisionFreeSpeedModelBuilder.hpp"
-#include "CollisionFreeSpeedModelData.hpp"
 #include "OperationalModel.hpp"
 #include "conversion.hpp"
 #include "type_casters.hpp" // IWYU pragma: keep
@@ -25,14 +24,14 @@ void init_collision_free_speed_model(py::module_& m)
             py::arg("strength_geometry_repulsion"),
             py::arg("range_geometry_repulsion"))
         .def("build", &CollisionFreeSpeedModelBuilder::Build);
-    py::class_<CollisionFreeSpeedModelData>(m, "CollisionFreeSpeedModelState")
-        .def_static("_defaults", []() { return CollisionFreeSpeedModelData{}; })
+    py::class_<CollisionFreeSpeedModel::Agent>(m, "CollisionFreeSpeedModelState")
+        .def_static("_defaults", []() { return CollisionFreeSpeedModel::Agent{}; })
         .def(
             py::init([](std::tuple<double, double> orientation,
                         double timeGap,
                         double desiredSpeed,
                         double radius) {
-                return CollisionFreeSpeedModelData{
+                return CollisionFreeSpeedModel::Agent{
                     .orientation = intoPoint(orientation),
                     .timeGap = timeGap,
                     .v0 = desiredSpeed,
@@ -43,8 +42,8 @@ void init_collision_free_speed_model(py::module_& m)
             py::arg("time_gap"),
             py::arg("desired_speed"),
             py::arg("radius"))
-        .def_readwrite("orientation", &CollisionFreeSpeedModelData::orientation)
-        .def_readwrite("time_gap", &CollisionFreeSpeedModelData::timeGap)
-        .def_readwrite("desired_speed", &CollisionFreeSpeedModelData::v0)
-        .def_readwrite("radius", &CollisionFreeSpeedModelData::radius);
+        .def_readwrite("orientation", &CollisionFreeSpeedModel::Agent::orientation)
+        .def_readwrite("time_gap", &CollisionFreeSpeedModel::Agent::timeGap)
+        .def_readwrite("desired_speed", &CollisionFreeSpeedModel::Agent::v0)
+        .def_readwrite("radius", &CollisionFreeSpeedModel::Agent::radius);
 }

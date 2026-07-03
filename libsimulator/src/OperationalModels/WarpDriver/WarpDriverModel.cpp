@@ -28,10 +28,10 @@
 #include "WarpDriverModel.hpp"
 
 #include "GenericAgent.hpp"
+#include "NeighborhoodSearch.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
 #include "SimulationError.hpp"
-#include "WarpDriverModelData.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -348,15 +348,26 @@ OperationalModelType WarpDriverModel::Type() const
     return OperationalModelType::WARP_DRIVER;
 }
 
+void WarpDriverModel::InitializeAgent(GenericAgent& agent) const
+{
+    auto& model = std::get<Agent>(agent.model);
+    model.timeHorizon = _timeHorizon;
+    model.stepSize = _stepSize;
+    model.timeUncertainty = _timeUncertainty;
+    model.velocityUncertaintyX = _velocityUncertaintyX;
+    model.velocityUncertaintyY = _velocityUncertaintyY;
+    model.numSamples = _numSamples;
+}
+
 void WarpDriverModel::CheckModelConstraint(
     const GenericAgent& agent,
-    const NeighborhoodSearchType& /*neighborhoodSearch*/,
+    const NeighborhoodSearch<GenericAgent>& /*neighborhoodSearch*/,
     const CollisionGeometry& /*geometry*/) const
 {
-    const auto* data = std::get_if<WarpDriverModelData>(&agent.model);
+    const auto* data = std::get_if<Agent>(&agent.model);
     if(!data) {
         throw SimulationError(
-            "WarpDriverModel constraint check: agent {} does not have WarpDriverModelData",
+            "WarpDriverModel constraint check: agent {} does not have WarpDriverModel data",
             agent.id);
     }
     if(data->radius <= 0.0) {
@@ -378,8 +389,8 @@ void WarpDriverModel::ComputeNext(
     const CollisionGeometry& geometry,
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
-    const auto& agentData = std::get<WarpDriverModelData>(current.model);
-    auto& nextData = std::get<WarpDriverModelData>(next.model);
+    const auto& agentData = std::get<Agent>(current.model);
+    auto& nextData = std::get<Agent>(next.model);
     const double speed = agentData.v0;
 
     // Agent orientation (unit vector). If zero, default to +x.
@@ -412,7 +423,7 @@ void WarpDriverModel::ComputeNext(
 
     // === Step 1: Projected trajectory in agent-centric space ===
     // r(t) = (speed * t, 0, t) for t in [0, timeHorizon]
-    const double dtSample = _timeHorizon / std::max(_numSamples - 1, 1);
+    const double dtSample = agentData.timeHorizon / std::max(agentData.numSamples - 1, 1);
 
     // === Step 2: Perceive - build collision probability field ===
     const auto neighbors = neighborhoodSearch.GetNeighboringAgents(current.pos, _cutOffRadius);
@@ -427,7 +438,7 @@ void WarpDriverModel::ComputeNext(
         if(neighbor.id == current.id) {
             continue;
         }
-        const auto* nbData = std::get_if<WarpDriverModelData>(&neighbor.model);
+        const auto* nbData = std::get_if<Agent>(&neighbor.model);
         if(!nbData) {
             continue;
         }
@@ -454,9 +465,9 @@ void WarpDriverModel::ComputeNext(
         double pTotal;
         STP gradTotal;
     };
-    std::vector<Sample> samples(static_cast<size_t>(_numSamples));
+    std::vector<Sample> samples(static_cast<size_t>(agentData.numSamples));
 
-    for(int i = 0; i < _numSamples; ++i) {
+    for(int i = 0; i < agentData.numSamples; ++i) {
         const double t = i * dtSample;
         const double lateralPerturbation = perturbDist(_rng);
         samples[static_cast<size_t>(i)] =
@@ -468,7 +479,7 @@ void WarpDriverModel::ComputeNext(
             continue;
         }
 
-        const auto* nbData = std::get_if<WarpDriverModelData>(&neighbor.model);
+        const auto* nbData = std::get_if<Agent>(&neighbor.model);
         if(!nbData) {
             continue;
         }
@@ -495,10 +506,10 @@ void WarpDriverModel::ComputeNext(
         wp.orientB = nbOrient;
         wp.speedB = nbSpeed;
         wp.radiusB = agentData.radius + nbData->radius; // Minkowski sum
-        wp.lambda = _timeUncertainty;
-        wp.velocityUncertaintyX = _velocityUncertaintyX;
-        wp.velocityUncertaintyY = _velocityUncertaintyY;
-        wp.timeHorizon = _timeHorizon;
+        wp.lambda = agentData.timeUncertainty;
+        wp.velocityUncertaintyX = agentData.velocityUncertaintyX;
+        wp.velocityUncertaintyY = agentData.velocityUncertaintyY;
+        wp.timeHorizon = agentData.timeHorizon;
 
         for(auto& s : samples) {
             // Forward warp sample point to neighbor's Intrinsic Field space
@@ -563,9 +574,9 @@ void WarpDriverModel::ComputeNext(
 
         // q = S - alpha * P * G  (Eq. 8)
         STP q{};
-        q.x = S.x - _stepSize * P * G.x;
-        q.y = S.y - _stepSize * P * G.y;
-        q.t = S.t - _stepSize * P * G.t;
+        q.x = S.x - agentData.stepSize * P * G.x;
+        q.y = S.y - agentData.stepSize * P * G.y;
+        q.t = S.t - agentData.stepSize * P * G.t;
 
         if(q.t > 1e-9) {
             newVelLocal = Point{q.x / q.t, q.y / q.t};

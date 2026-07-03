@@ -135,25 +135,26 @@ TEST(CustomModel, RunsThroughOperationalDecisionSystem)
 TEST(ModelTypeOf, MapsEveryAgentModelDataToItsOperationalModelType)
 {
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{GeneralizedCentrifugalForceModelData{}}),
+        ModelTypeOf(GenericAgent::Model{GeneralizedCentrifugalForceModel::Agent{}}),
         OperationalModelType::GENERALIZED_CENTRIFUGAL_FORCE);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModelData{}}),
+        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModel::Agent{}}),
         OperationalModelType::COLLISION_FREE_SPEED);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModelV2Data{}}),
+        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModelV2::Agent{}}),
         OperationalModelType::COLLISION_FREE_SPEED_V2);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModelV3Data{}}),
+        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModelV3::Agent{}}),
         OperationalModelType::COLLISION_FREE_SPEED_V3);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{AnticipationVelocityModelData{}}),
+        ModelTypeOf(GenericAgent::Model{AnticipationVelocityModel::Agent{}}),
         OperationalModelType::ANTICIPATION_VELOCITY_MODEL);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{SocialForceModelData{}}),
+        ModelTypeOf(GenericAgent::Model{SocialForceModel::Agent{}}),
         OperationalModelType::SOCIAL_FORCE);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{WarpDriverModelData{}}), OperationalModelType::WARP_DRIVER);
+        ModelTypeOf(GenericAgent::Model{WarpDriverModel::Agent{}}),
+        OperationalModelType::WARP_DRIVER);
     ASSERT_EQ(
         ModelTypeOf(GenericAgent::Model{CustomModelData{MinimalState{}}}),
         OperationalModelType::CUSTOM_MODEL);

@@ -2,7 +2,6 @@
 #include "Simulation.hpp"
 
 #include "CollisionGeometry.hpp"
-#include "GeneralizedCentrifugalForceModelData.hpp"
 #include "GenericAgent.hpp"
 #include "IteratorPair.hpp"
 #include "Journey.hpp"
@@ -234,6 +233,7 @@ GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
             ToString(_operationalDecisionSystem.ModelType()));
     }
 
+    _operationalDecisionSystem.InitializeAgent(agent);
     _operationalDecisionSystem.ValidateAgent(agent, _neighborhoodSearch, *_geometry);
 
     _stageManager.HandleNewAgent(agent.stageId);
