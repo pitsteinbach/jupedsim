@@ -41,7 +41,7 @@ double NeighborInfluence(
     double best_influence = 0.0;
     double best_weight = 0.0;
     for(const auto& neighbor : neighborhood) {
-        const auto relative = neighbor.pos - pos;
+        const auto relative = Pos(neighbor) - pos;
         const auto x = reference_direction.ScalarProduct(relative);
         if(x <= 0.0) {
             continue;
@@ -74,14 +74,14 @@ void CollisionFreeSpeedModelV3::ComputeNext(
     const CollisionGeometry& geometry,
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
-    auto neighborhood = neighborhoodSearch.GetNeighboringAgents(current.pos, _cutOffRadius);
-    const auto& boundary = geometry.LineSegmentsInApproxDistanceTo(current.pos);
+    auto neighborhood = neighborhoodSearch.GetNeighboringAgents(Pos(current), _cutOffRadius);
+    const auto& boundary = geometry.LineSegmentsInApproxDistanceTo(Pos(current));
 
     std::erase_if(neighborhood, [&current, &boundary](const auto& neighbor) {
         if(current.id == neighbor.id) {
             return true;
         }
-        const auto agent_to_neighbor = LineSegment(current.pos, neighbor.pos);
+        const auto agent_to_neighbor = LineSegment(Pos(current), Pos(neighbor));
         return std::any_of(
             boundary.cbegin(), boundary.cend(), [&agent_to_neighbor](const auto& segment) {
                 return intersects(agent_to_neighbor, segment);
@@ -97,14 +97,14 @@ void CollisionFreeSpeedModelV3::ComputeNext(
         });
 
     const auto& model = std::get<Agent>(current.model);
-    const auto desired_direction = (current.destination - current.pos).Normalized();
+    const auto desired_direction = (current.destination - Pos(current)).Normalized();
     auto reference_direction = (desired_direction + boundaryRepulsion).Normalized();
     if(reference_direction == Point{}) {
         reference_direction = model.orientation;
     }
 
     const auto heading_target =
-        NeighborInfluence(neighborhood, current.pos, reference_direction, model);
+        NeighborInfluence(neighborhood, Pos(current), reference_direction, model);
     const auto alpha = std::clamp(dT / TauTheta, 0.0, 1.0);
     const auto heading_angle = model.headingAngle + alpha * (heading_target - model.headingAngle);
     auto direction =
@@ -136,8 +136,8 @@ void CollisionFreeSpeedModelV3::ComputeNext(
 
     const auto optimal_speed = OptimalSpeed(current, spacing, model.timeGap);
     const auto velocity = direction * optimal_speed;
-    next.pos = current.pos + velocity * dT;
     auto& nextModel = std::get<Agent>(next.model);
+    nextModel.position = Pos(current) + velocity * dT;
     nextModel.orientation = direction;
     nextModel.headingAngle = heading_angle;
 }
@@ -179,29 +179,29 @@ void CollisionFreeSpeedModelV3::CheckModelConstraint(
     validateConstraint(model.thetaMaxUpperBound, 0.0, std::acos(-1.0), "thetaMaxUpperBound");
     validateConstraint(model.agentBuffer, 0.0, 100.0, "agentBuffer");
 
-    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(agent.pos, 2);
+    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(Pos(agent), 2);
     for(const auto& neighbor : neighbors) {
         if(agent.id == neighbor.id) {
             continue;
         }
         const auto& neighbor_model = std::get<Agent>(neighbor.model);
         const auto contactDist = model.radius + neighbor_model.radius;
-        const auto distance = (agent.pos - neighbor.pos).Norm();
+        const auto distance = (Pos(agent) - Pos(neighbor)).Norm();
         if(contactDist >= distance) {
             throw SimulationError(
                 "Model constraint violation: Agent {} too close to agent {}: distance {}",
-                agent.pos,
-                neighbor.pos,
+                Pos(agent),
+                Pos(neighbor),
                 distance);
         }
     }
 
-    const auto lineSegments = geometry.LineSegmentsInDistanceTo(model.radius, agent.pos);
+    const auto lineSegments = geometry.LineSegmentsInDistanceTo(model.radius, Pos(agent));
     if(std::begin(lineSegments) != std::end(lineSegments)) {
         throw SimulationError(
             "Model constraint violation: Agent {} too close to geometry boundaries, distance "
             "<= {}",
-            agent.pos,
+            Pos(agent),
             model.radius);
     }
 }
@@ -223,7 +223,7 @@ double CollisionFreeSpeedModelV3::GetSpacing(
 {
     const auto& model1 = std::get<Agent>(ped1.model);
     const auto& model2 = std::get<Agent>(ped2.model);
-    const auto distp12 = ped2.pos - ped1.pos;
+    const auto distp12 = Pos(ped2) - Pos(ped1);
     if(direction.ScalarProduct(distp12) < 0.0) {
         return std::numeric_limits<double>::max();
     }
@@ -242,8 +242,8 @@ Point CollisionFreeSpeedModelV3::BoundaryRepulsion(
     const GenericAgent& ped,
     const LineSegment& boundary_segment) const
 {
-    const auto pt = boundary_segment.ShortestPoint(ped.pos);
-    const auto dist_vec = pt - ped.pos;
+    const auto pt = boundary_segment.ShortestPoint(Pos(ped));
+    const auto dist_vec = pt - Pos(ped);
     const auto [dist, e_iw] = dist_vec.NormAndNormalized();
     const auto& model = std::get<Agent>(ped.model);
     const auto l = model.radius;

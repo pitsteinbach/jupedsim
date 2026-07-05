@@ -2,6 +2,7 @@
 #pragma once
 
 #include "FormatAny.hpp"
+#include "Point.hpp"
 
 #include <any>
 #include <type_traits>
@@ -26,6 +27,12 @@
 /// diagnostic <type@address> representation.
 class CustomModelData
 {
+public:
+    /// Agent position cache, kept outside the type-erased payload so the framework can read it
+    /// without touching the payload (for GilSafePyObject payloads: without acquiring the GIL).
+    /// The owning model must keep it in sync with the payload's own position state.
+    Point position{};
+
 private:
     std::any value{};
     FormatFn format{};

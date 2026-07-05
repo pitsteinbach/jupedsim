@@ -43,8 +43,8 @@ void AnticipationVelocityModel::ComputeNext(
     const CollisionGeometry& geometry,
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
-    auto neighborhood = neighborhoodSearch.GetNeighboringAgents(current.pos, _cutOffRadius);
-    const auto& boundary = geometry.LineSegmentsInApproxDistanceTo(current.pos);
+    auto neighborhood = neighborhoodSearch.GetNeighboringAgents(Pos(current), _cutOffRadius);
+    const auto& boundary = geometry.LineSegmentsInApproxDistanceTo(Pos(current));
 
     // Remove any agent from the neighborhood that is obstructed by geometry and the current
     // agent
@@ -56,7 +56,7 @@ void AnticipationVelocityModel::ComputeNext(
                 if(current.id == neighbor.id) {
                     return true;
                 }
-                const auto agent_to_neighbor = LineSegment(current.pos, neighbor.pos);
+                const auto agent_to_neighbor = LineSegment(Pos(current), Pos(neighbor));
                 if(std::find_if(
                        boundary.cbegin(),
                        boundary.cend(),
@@ -78,7 +78,7 @@ void AnticipationVelocityModel::ComputeNext(
             return res + NeighborRepulsion(current, neighbor);
         });
 
-    const auto desiredDirection = (current.destination - current.pos).Normalized();
+    const auto desiredDirection = (current.destination - Pos(current)).Normalized();
     auto direction = (desiredDirection + neighborRepulsion).Normalized();
     const auto& model = std::get<Agent>(current.model);
     if(direction == Point{}) {
@@ -100,11 +100,11 @@ void AnticipationVelocityModel::ComputeNext(
 
     const auto optimal_speed = OptimalSpeed(current, spacing, model.timeGap);
     direction = HandleWallAvoidance(
-        direction, current.pos, model.radius, boundary, wallBufferDistance, model.pushoutStrength);
+        direction, Pos(current), model.radius, boundary, wallBufferDistance, model.pushoutStrength);
 
     const auto velocity = direction * optimal_speed;
-    next.pos = current.pos + velocity * dT;
     auto& nextModel = std::get<Agent>(next.model);
+    nextModel.position = Pos(current) + velocity * dT;
     nextModel.orientation = direction;
     nextModel.velocity = velocity;
 };
@@ -115,7 +115,7 @@ Point AnticipationVelocityModel::UpdateDirection(
     double dt) const
 {
     const auto& model = std::get<Agent>(ped.model);
-    const Point desiredDirection = (ped.destination - ped.pos).Normalized();
+    const Point desiredDirection = (ped.destination - Pos(ped)).Normalized();
     const Point actualDirection = model.orientation;
     Point updatedDirection;
 
@@ -180,29 +180,29 @@ void AnticipationVelocityModel::CheckModelConstraint(
     constexpr double reactionTimeMax = 1.0;
     validateConstraint(reactionTime, reactionTimeMin, reactionTimeMax, "reactionTime", true);
 
-    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(agent.pos, 2);
+    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(Pos(agent), 2);
     for(const auto& neighbor : neighbors) {
         if(agent.id == neighbor.id) {
             continue;
         }
         const auto& neighbor_model = std::get<Agent>(neighbor.model);
         const auto contanctdDist = r + neighbor_model.radius;
-        const auto distance = (agent.pos - neighbor.pos).Norm();
+        const auto distance = (Pos(agent) - Pos(neighbor)).Norm();
         if(contanctdDist >= distance) {
             throw SimulationError(
                 "Model constraint violation: Agent {} too close to agent {}: distance {}",
-                agent.pos,
-                neighbor.pos,
+                Pos(agent),
+                Pos(neighbor),
                 distance);
         }
     }
 
-    const auto lineSegments = geometry.LineSegmentsInDistanceTo(r, agent.pos);
+    const auto lineSegments = geometry.LineSegmentsInDistanceTo(r, Pos(agent));
     if(std::begin(lineSegments) != std::end(lineSegments)) {
         throw SimulationError(
             "Model constraint violation: Agent {} too close to geometry boundaries, distance "
             "<= {}",
-            agent.pos,
+            Pos(agent),
             r);
     }
 }
@@ -232,7 +232,7 @@ double AnticipationVelocityModel::GetSpacing(
 {
     const auto& model1 = std::get<Agent>(ped1.model);
     const auto& model2 = std::get<Agent>(ped2.model);
-    const auto distp12 = ped2.pos - ped1.pos;
+    const auto distp12 = Pos(ped2) - Pos(ped1);
     const auto inFront = direction.ScalarProduct(distp12) >= 0;
     if(!inFront) {
         return std::numeric_limits<double>::max();
@@ -274,13 +274,13 @@ Point AnticipationVelocityModel::NeighborRepulsion(
     const auto& model1 = std::get<Agent>(ped1.model);
     const auto& model2 = std::get<Agent>(ped2.model);
 
-    const auto distp12 = ped2.pos - ped1.pos;
+    const auto distp12 = Pos(ped2) - Pos(ped1);
     const auto [distance, ep12] = distp12.NormAndNormalized();
     const double adjustedDist = distance - (model1.radius + model2.radius);
 
     // Pedestrian movement and desired directions
     const auto& e1 = model1.orientation;
-    const auto& d1 = (ped1.destination - ped1.pos).Normalized();
+    const auto& d1 = (ped1.destination - Pos(ped1)).Normalized();
     const auto& e2 = model2.orientation;
 
     // Check perception range (Eq. 1)

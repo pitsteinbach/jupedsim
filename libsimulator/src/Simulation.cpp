@@ -213,8 +213,8 @@ BaseStage::ID Simulation::AddStage(const StageDescription stageDescription)
 GenericAgent::ID Simulation::AddAgent(GenericAgent agent)
 {
     JPS_SCOPED_TIMER_AND_TRACE(_timer, "Add Agent", Detailed);
-    if(!_geometry->InsideGeometry(agent.pos)) {
-        throw SimulationError("Agent {} not inside walkable area", agent.pos);
+    if(!_geometry->InsideGeometry(Pos(agent))) {
+        throw SimulationError("Agent {} not inside walkable area", Pos(agent));
     }
     if(_journeys.count(agent.journeyId) == 0) {
         throw SimulationError("Unknown journey id: {}", agent.journeyId);
@@ -359,7 +359,7 @@ std::vector<GenericAgent::ID> Simulation::AgentsInPolygon(const std::vector<Poin
     result.reserve(candidates.size());
     std::for_each(
         std::begin(candidates), std::end(candidates), [&result, &poly](const auto& agent) {
-            if(poly.IsInside(agent.pos)) {
+            if(poly.IsInside(Pos(agent))) {
                 result.push_back(agent.id);
             }
         });

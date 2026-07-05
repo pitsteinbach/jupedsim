@@ -44,9 +44,10 @@ public:
         const NeighborhoodSearch<GenericAgent>&) const override
     {
         const auto& state = std::get<CustomModelData>(current.model).Get<MinimalState>();
-        auto& nextState = std::get<CustomModelData>(next.model).Get<MinimalState>();
+        auto& nextModelData = std::get<CustomModelData>(next.model);
+        auto& nextState = nextModelData.Get<MinimalState>();
 
-        next.pos = current.pos + state.velocity * dT;
+        nextModelData.position = Pos(current) + state.velocity * dT;
         nextState.velocity = state.velocity;
         nextState.applications = state.applications + 1;
     }
@@ -128,7 +129,7 @@ TEST(CustomModel, RunsThroughOperationalDecisionSystem)
 
     const auto& agent = agents.front();
     const auto& state = std::get<CustomModelData>(agent.model).Get<MinimalState>();
-    ASSERT_EQ(agent.pos, Point(1.0, 0.0));
+    ASSERT_EQ(Pos(agent), Point(1.0, 0.0));
     ASSERT_EQ(state.applications, 1);
 }
 

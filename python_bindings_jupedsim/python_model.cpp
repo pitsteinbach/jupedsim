@@ -105,7 +105,8 @@ void PythonModel::ComputeNext(
 
     // "next" shares the Python state object with "current" (GilSafePyObject copies are
     // refcounted, not cloned), so this also rejects returning the current state instance.
-    auto& customModelData = std::get<CustomModelData>(next.model).Get<GilSafePyObject>();
+    auto& nextModelData = std::get<CustomModelData>(next.model);
+    auto& customModelData = nextModelData.Get<GilSafePyObject>();
     if(pythonUpdate.is(customModelData.Get())) {
         throw SimulationError(
             "Current and updated model state are the same instance. "
@@ -127,7 +128,9 @@ void PythonModel::ComputeNext(
     }
 
     try {
-        next.pos = intoPoint(py::cast<std::tuple<double, double>>(attr));
+        // Sync the GIL-free position cache from the returned Python state so the
+        // framework can read the agent position without acquiring the GIL.
+        nextModelData.position = intoPoint(py::cast<std::tuple<double, double>>(attr));
     } catch(const py::cast_error&) {
         // Diagnostics run Python code on the offending object; they must not
         // be able to replace the error they describe.

@@ -41,7 +41,7 @@ void SocialForceModel::ComputeNext(
     auto forces = DrivingForce(current);
 
     const auto neighborhood =
-        neighborhoodSearch.GetNeighboringAgents(current.pos, this->_cutOffRadius);
+        neighborhoodSearch.GetNeighboringAgents(Pos(current), this->_cutOffRadius);
     Point F_rep;
     for(const auto& neighbor : neighborhood) {
         if(neighbor.id == current.id) {
@@ -50,7 +50,7 @@ void SocialForceModel::ComputeNext(
         F_rep += AgentForce(current, neighbor);
     }
     forces += F_rep / model.mass;
-    const auto& walls = geometry.LineSegmentsInApproxDistanceTo(current.pos);
+    const auto& walls = geometry.LineSegmentsInApproxDistanceTo(Pos(current));
 
     const auto obstacle_f = std::accumulate(
         walls.cbegin(),
@@ -62,8 +62,9 @@ void SocialForceModel::ComputeNext(
     forces += obstacle_f / model.mass;
 
     const auto velocity = model.velocity + forces * dT;
-    next.pos = current.pos + velocity * dT;
-    std::get<Agent>(next.model).velocity = velocity;
+    auto& nextModel = std::get<Agent>(next.model);
+    nextModel.position = Pos(current) + velocity * dT;
+    nextModel.velocity = velocity;
 }
 
 void SocialForceModel::CheckModelConstraint(
@@ -98,27 +99,27 @@ void SocialForceModel::CheckModelConstraint(
     const auto radius = model.radius;
     throwIfNegative(radius, "radius");
 
-    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(agent.pos, 2);
+    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(Pos(agent), 2);
     for(const auto& neighbor : neighbors) {
-        const auto distance = (agent.pos - neighbor.pos).Norm();
+        const auto distance = (Pos(agent) - Pos(neighbor)).Norm();
 
         if(model.radius >= distance) {
             throw SimulationError(
                 "Model constraint violation: Agent {} too close to agent {}: distance {}, "
                 "radius {}",
-                agent.pos,
-                neighbor.pos,
+                Pos(agent),
+                Pos(neighbor),
                 distance,
                 model.radius);
         }
     }
     const auto maxRadius = model.radius / 2;
-    const auto lineSegments = geometry.LineSegmentsInDistanceTo(maxRadius, agent.pos);
+    const auto lineSegments = geometry.LineSegmentsInDistanceTo(maxRadius, Pos(agent));
     if(std::begin(lineSegments) != std::end(lineSegments)) {
         throw SimulationError(
             "Model constraint violation: Agent {} too close to geometry boundaries, distance <= "
             "{}/2",
-            agent.pos,
+            Pos(agent),
             model.radius);
     }
 }
@@ -126,7 +127,7 @@ void SocialForceModel::CheckModelConstraint(
 Point SocialForceModel::DrivingForce(const GenericAgent& agent)
 {
     const auto& model = std::get<Agent>(agent.model);
-    const Point e0 = (agent.destination - agent.pos).Normalized();
+    const Point e0 = (agent.destination - Pos(agent)).Normalized();
     return (e0 * model.desiredSpeed - model.velocity) / model.reactionTime;
 };
 double SocialForceModel::PushingForceLength(double A, double B, double r, double distance)
@@ -142,8 +143,8 @@ Point SocialForceModel::AgentForce(const GenericAgent& ped1, const GenericAgent&
     const double total_radius = model1.radius + model2.radius;
 
     return ForceBetweenPoints(
-        ped1.pos,
-        ped2.pos,
+        Pos(ped1),
+        Pos(ped2),
         model1.agentScale,
         model1.forceDistance,
         total_radius,
@@ -155,9 +156,9 @@ Point SocialForceModel::AgentForce(const GenericAgent& ped1, const GenericAgent&
 Point SocialForceModel::ObstacleForce(const GenericAgent& agent, const LineSegment& segment) const
 {
     const auto& model = std::get<Agent>(agent.model);
-    const Point pt = segment.ShortestPoint(agent.pos);
+    const Point pt = segment.ShortestPoint(Pos(agent));
     return ForceBetweenPoints(
-        agent.pos,
+        Pos(agent),
         pt,
         model.obstacleScale,
         model.forceDistance,

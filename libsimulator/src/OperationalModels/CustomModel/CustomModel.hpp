@@ -13,8 +13,9 @@
 ///
 /// Per-agent custom state should be stored in GenericAgent::model as CustomModelData. In
 /// ComputeNext(), "next" arrives as an exact copy of "current"; the model overwrites only the
-/// fields it changes. CustomModelData stores its payload in std::any, so model implementations
-/// must agree on the concrete stored type and retrieve it with the exact typed accessors.
+/// fields it changes. The agent's new position must be written to CustomModelData::position of
+/// "next". CustomModelData stores its payload in std::any, so model implementations must agree on
+/// the concrete stored type and retrieve it with the exact typed accessors.
 ///
 /// Payload types must be copy-constructible because GenericAgent values are copied during
 /// simulation queries, e.g. by NeighborhoodSearch.

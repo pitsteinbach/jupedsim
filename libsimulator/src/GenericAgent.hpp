@@ -16,11 +16,32 @@
 
 #include <fmt/core.h>
 
+#include <concepts>
 #include <deque>
 #include <utility>
 #include <variant>
 class Journey;
 class BaseStage;
+
+/// Agent position is owned by the per-model agent state. Every alternative of
+/// GenericAgent::Model must satisfy this concept; the framework accesses the
+/// position type-erased through Pos().
+template <typename T>
+concept ModelAgentState = requires(T t) {
+    // Pos() hands out mutable Point& into the state, so a convertible or const member
+    // is not enough.
+    { t.position } -> std::same_as<Point&>;
+};
+
+template <typename Variant>
+inline constexpr bool EachAlternativeIsModelAgentState = false;
+template <typename... Ts>
+inline constexpr bool EachAlternativeIsModelAgentState<std::variant<Ts...>> =
+    (ModelAgentState<Ts> && ...);
+
+struct GenericAgent;
+const Point& Pos(const GenericAgent& agent);
+Point& Pos(GenericAgent& agent);
 
 struct GenericAgent {
     using ID = jps::UniqueID<GenericAgent>;
@@ -33,9 +54,6 @@ struct GenericAgent {
     Point destination{};
     Point target{};
 
-    // Agent fields common for all models
-    Point pos{};
-
     using Model = std::variant<
         GeneralizedCentrifugalForceModel::Agent,
         CollisionFreeSpeedModel::Agent,
@@ -45,6 +63,9 @@ struct GenericAgent {
         SocialForceModel::Agent,
         WarpDriverModel::Agent,
         CustomModelData>;
+    static_assert(
+        EachAlternativeIsModelAgentState<Model>,
+        "Every agent model state must provide a 'Point position' member");
     Model model{};
 
     GenericAgent(
@@ -57,11 +78,23 @@ struct GenericAgent {
         , journeyId(journeyId_)
         , stageId(stageId_)
         , target(pos_)
-        , pos(pos_)
         , model(std::move(model_))
     {
+        // The model variant is initialized above, only then can the position
+        // be written through it.
+        Pos(*this) = pos_;
     }
 };
+
+inline const Point& Pos(const GenericAgent& agent)
+{
+    return std::visit([](const auto& m) -> const Point& { return m.position; }, agent.model);
+}
+
+inline Point& Pos(GenericAgent& agent)
+{
+    return std::visit([](auto& m) -> Point& { return m.position; }, agent.model);
+}
 
 /// Maps agent model data to the operational model type it belongs to. Kept
 /// exhaustive on purpose: adding a model type will not compile until the
@@ -112,7 +145,7 @@ struct fmt::formatter<GenericAgent> {
                     agent.stageId,
                     agent.destination,
                     agent.target,
-                    agent.pos,
+                    Pos(agent),
                     m);
             },
             agent.model);
