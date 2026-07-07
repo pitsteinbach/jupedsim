@@ -29,23 +29,19 @@ public:
         double timeGap{1.06};
         double v0{1.2};
         double radius{0.2};
-        // Configured simulation-wide via the builder; stamped into every agent
-        // by InitializeAgent, not settable per agent through the Python API.
         /// Add a small outward component to maintain minimum distance from walls.
         double pushoutStrength{0.3};
     };
 
 private:
     double _cutOffRadius{3};
-    double _pushoutStrength;
     // Shared sequential RNG: draws must stay on the model to keep simulations deterministic.
     mutable std::mt19937 gen;
 
 public:
-    AnticipationVelocityModel(double pushoutStrength, uint64_t rng_seed);
+    explicit AnticipationVelocityModel(uint64_t rng_seed);
     ~AnticipationVelocityModel() override = default;
     OperationalModelType Type() const override;
-    void InitializeAgent(GenericAgent& agent) const override;
     void ComputeNext(
         double dT,
         const GenericAgent& current,

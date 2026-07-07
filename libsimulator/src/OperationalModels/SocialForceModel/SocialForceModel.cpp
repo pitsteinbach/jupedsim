@@ -15,19 +15,9 @@
 #include <numeric>
 #include <string>
 
-SocialForceModel::SocialForceModel(double bodyForce_, double friction_)
-    : bodyForce(bodyForce_), friction(friction_) {};
-
 OperationalModelType SocialForceModel::Type() const
 {
     return OperationalModelType::SOCIAL_FORCE;
-}
-
-void SocialForceModel::InitializeAgent(GenericAgent& agent) const
-{
-    auto& model = std::get<Agent>(agent.model);
-    model.bodyForce = bodyForce;
-    model.friction = friction;
 }
 
 void SocialForceModel::ComputeNext(

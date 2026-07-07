@@ -18,30 +18,9 @@
 #include <numeric>
 #include <vector>
 
-CollisionFreeSpeedModel::CollisionFreeSpeedModel(
-    double strengthNeighborRepulsion_,
-    double rangeNeighborRepulsion_,
-    double strengthGeometryRepulsion_,
-    double rangeGeometryRepulsion_)
-    : strengthNeighborRepulsion(strengthNeighborRepulsion_)
-    , rangeNeighborRepulsion(rangeNeighborRepulsion_)
-    , strengthGeometryRepulsion(strengthGeometryRepulsion_)
-    , rangeGeometryRepulsion(rangeGeometryRepulsion_)
-{
-}
-
 OperationalModelType CollisionFreeSpeedModel::Type() const
 {
     return OperationalModelType::COLLISION_FREE_SPEED;
-}
-
-void CollisionFreeSpeedModel::InitializeAgent(GenericAgent& agent) const
-{
-    auto& model = std::get<Agent>(agent.model);
-    model.strengthNeighborRepulsion = strengthNeighborRepulsion;
-    model.rangeNeighborRepulsion = rangeNeighborRepulsion;
-    model.strengthGeometryRepulsion = strengthGeometryRepulsion;
-    model.rangeGeometryRepulsion = rangeGeometryRepulsion;
 }
 
 void CollisionFreeSpeedModel::ComputeNext(

@@ -1,7 +1,7 @@
 import time
 
 import pytest
-from jupedsim.models.collision_free_speed import CollisionFreeSpeedModel
+from jupedsim.models import ModelType
 
 
 def test_timer_integration_small_simulation(tmp_path):
@@ -16,7 +16,9 @@ def test_timer_integration_small_simulation(tmp_path):
 
     # Minimal geometry: small square
     geom = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
-    sim = Simulation(model=CollisionFreeSpeedModel(), geometry=geom, dt=0.01)
+    sim = Simulation(
+        model=ModelType.COLLISION_FREE_SPEED, geometry=geom, dt=0.01
+    )
 
     # underlying C++ simulation object exposed as _obj
     timer = sim.timer

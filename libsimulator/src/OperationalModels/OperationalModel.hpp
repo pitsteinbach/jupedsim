@@ -56,11 +56,6 @@ public:
 
     virtual OperationalModelType Type() const = 0;
 
-    /// Called once by Simulation::AddAgent before constraint validation. Models stamp
-    /// simulation-configured per-agent defaults (builder parameters) into the agent's
-    /// model data so that ComputeNext/CheckModelConstraint can read them from the agent.
-    virtual void InitializeAgent(GenericAgent&) const {}
-
     /// Computes the agent state for the next iteration.
     /// "next" arrives as an exact copy of "current"; implementations overwrite only the fields
     /// they change. Other agents must be read exclusively from the frozen current generation,

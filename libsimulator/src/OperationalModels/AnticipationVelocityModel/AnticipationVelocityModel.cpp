@@ -20,20 +20,13 @@
 #include <numeric>
 #include <vector>
 
-AnticipationVelocityModel::AnticipationVelocityModel(double pushoutStrength, uint64_t rng_seed)
-    : _pushoutStrength(pushoutStrength), gen(rng_seed)
+AnticipationVelocityModel::AnticipationVelocityModel(uint64_t rng_seed) : gen(rng_seed)
 {
 }
 
 OperationalModelType AnticipationVelocityModel::Type() const
 {
     return OperationalModelType::ANTICIPATION_VELOCITY_MODEL;
-}
-
-void AnticipationVelocityModel::InitializeAgent(GenericAgent& agent) const
-{
-    auto& model = std::get<Agent>(agent.model);
-    model.pushoutStrength = _pushoutStrength;
 }
 
 void AnticipationVelocityModel::ComputeNext(

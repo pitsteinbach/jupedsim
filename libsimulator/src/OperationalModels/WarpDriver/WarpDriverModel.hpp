@@ -27,8 +27,6 @@ public:
         double anchorY{0.0};
         double detourTime{0.0}; // remaining time in detour mode
         int detourSide{1}; // +1 = left, -1 = right of desired direction
-        // Configured simulation-wide via the builder; stamped into every agent
-        // by InitializeAgent, not settable per agent through the Python API.
         double timeHorizon{2.0};
         double stepSize{0.5};
         double timeUncertainty{0.5};
@@ -64,13 +62,6 @@ private:
         std::pair<double, Point> Sample(double x, double y) const;
     };
 
-    // Builder-configured values stamped into every agent by InitializeAgent
-    double _timeHorizon;
-    double _stepSize;
-    double _timeUncertainty;
-    double _velocityUncertaintyX;
-    double _velocityUncertaintyY;
-    int _numSamples;
     // Genuinely simulation-global state
     double _cutOffRadius;
 
@@ -78,21 +69,11 @@ private:
     mutable std::mt19937 _rng;
 
 public:
-    WarpDriverModel(
-        double timeHorizon,
-        double stepSize,
-        double sigma,
-        double timeUncertainty,
-        double velocityUncertaintyX,
-        double velocityUncertaintyY,
-        int numSamples,
-        uint64_t rngSeed = 42);
+    WarpDriverModel(double sigma, uint64_t rngSeed = 42);
 
     ~WarpDriverModel() override = default;
 
     OperationalModelType Type() const override;
-
-    void InitializeAgent(GenericAgent& agent) const override;
 
     void ComputeNext(
         double dT,

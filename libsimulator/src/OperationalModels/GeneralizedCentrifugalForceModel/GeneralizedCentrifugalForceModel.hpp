@@ -14,7 +14,7 @@ public:
     /// Per-agent state of the generalized centrifugal force model.
     struct Agent {
         Point position{};
-        Point orientation{0.0, 0.0};
+        Point orientation{1.0, 0.0};
         double speed{};
         Point e0{};
         int orientationDelay{};
@@ -25,8 +25,6 @@ public:
         double AMin{0.2};
         double BMin{0.2};
         double BMax{0.4};
-        // Configured simulation-wide via the builder; stamped into every agent
-        // by InitializeAgent, not settable per agent through the Python API.
         double strengthNeighborRepulsion{0.3};
         double strengthGeometryRepulsion{0.2};
         double maxNeighborInteractionDistance{2};
@@ -39,29 +37,12 @@ public:
 
 private:
     double _cutOffRadius{4.0}; // TODO (MC) check this free parameter
-    double strengthNeighborRepulsion;
-    double strengthGeometryRepulsion;
-    double maxNeighborInteractionDistance;
-    double maxGeometryInteractionDistance;
-    double maxNeighborInterpolationDistance;
-    double maxGeometryInterpolationDistance;
-    double maxNeighborRepulsionForce;
-    double maxGeometryRepulsionForce;
 
 public:
-    GeneralizedCentrifugalForceModel(
-        double strengthNeighborRepulsion,
-        double strengthWallRepulsion,
-        double maxNeighborInteractionDistance,
-        double maxGeometryInteractionDistance,
-        double maxNeighborInterpolationDistance,
-        double maxGeometryInterpolationDistance,
-        double maxNeighborRepulsionForce,
-        double maxGeometryRepulsionForce);
+    GeneralizedCentrifugalForceModel() = default;
     ~GeneralizedCentrifugalForceModel() override = default;
 
     OperationalModelType Type() const override;
-    void InitializeAgent(GenericAgent& agent) const override;
     void ComputeNext(
         double dT,
         const GenericAgent& current,

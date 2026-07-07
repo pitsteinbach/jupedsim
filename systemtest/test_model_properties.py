@@ -4,11 +4,66 @@ import math
 import jupedsim as jps
 import pytest
 
+_UNIT_SQUARE_10 = [(0, 0), (10, 0), (10, 10), (0, 10)]
+
+# Extra state kwargs where the raw C++ struct defaults do not satisfy the
+# model's add_agent constraints (GCFM requires a unit-length orientation, V3
+# requires non-zero repulsion ranges).
+MODEL_TYPE_STATE = [
+    (jps.ModelType.COLLISION_FREE_SPEED, jps.CollisionFreeSpeedModelState, {}),
+    (
+        jps.ModelType.COLLISION_FREE_SPEED_V2,
+        jps.CollisionFreeSpeedModelV2State,
+        {},
+    ),
+    (
+        jps.ModelType.COLLISION_FREE_SPEED_V3,
+        jps.CollisionFreeSpeedModelV3State,
+        {
+            "strength_neighbor_repulsion": 8.0,
+            "range_neighbor_repulsion": 0.1,
+            "strength_geometry_repulsion": 5.0,
+            "range_geometry_repulsion": 0.02,
+        },
+    ),
+    (
+        jps.ModelType.GENERALIZED_CENTRIFUGAL_FORCE,
+        jps.GeneralizedCentrifugalForceModelState,
+        {"orientation": (1.0, 0.0)},
+    ),
+    (jps.ModelType.SOCIAL_FORCE, jps.SocialForceModelState, {}),
+]
+
+
+@pytest.mark.parametrize(
+    "model_type, state_cls, state_kwargs",
+    MODEL_TYPE_STATE,
+    ids=[model_type.name for model_type, _, _ in MODEL_TYPE_STATE],
+)
+def test_simulation_from_model_type_enum(model_type, state_cls, state_kwargs):
+    """Stateless built-in models are constructed from a ModelType member."""
+    sim = jps.Simulation(model=model_type, geometry=_UNIT_SQUARE_10)
+    wp = sim.add_waypoint_stage((9, 9), 0.5)
+    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
+
+    agent_id = sim.add_agent(
+        journey_id, wp, state_cls(position=(1, 1), **state_kwargs)
+    )
+
+    for _ in range(10):
+        sim.iterate()
+    assert sim.agent(agent_id).position != (1, 1)
+
+
+def test_simulation_rejects_wrong_model_argument():
+    with pytest.raises(TypeError):
+        jps.Simulation(model=42, geometry=_UNIT_SQUARE_10)
+
 
 @pytest.fixture
 def corridor():
     return jps.Simulation(
-        model=jps.CollisionFreeSpeedModelV2(),
+        model=jps.ModelType.COLLISION_FREE_SPEED_V2,
         geometry=[(0, 0), (10, 0), (10, 2), (0, 2)],
     )
 
@@ -18,10 +73,11 @@ def test_set_desired_speed(corridor):
     wp = sim.add_waypoint_stage((10, 1), 0.5)
     journey_id = sim.add_journey(jps.JourneyDescription([wp]))
 
-    agent = jps.CollisionFreeSpeedModelV2AgentParameters(
-        journey_id=journey_id, stage_id=wp, position=(1, 1), desired_speed=1
+    agent_id = sim.add_agent(
+        journey_id,
+        wp,
+        jps.CollisionFreeSpeedModelV2State(position=(1, 1), desired_speed=1),
     )
-    agent_id = sim.add_agent(agent)
     assert math.isclose(sim.agent(agent_id).position[0], 1)
     for _ in range(0, 100):
         sim.iterate()
@@ -41,8 +97,8 @@ def test_set_desired_speed(corridor):
 @pytest.fixture
 def simulation_with_collision_free_speed_model_v2():
     return jps.Simulation(
-        model=jps.CollisionFreeSpeedModelV2(),
-        geometry=[(0, 0), (10, 0), (10, 10), (0, 10)],
+        model=jps.ModelType.COLLISION_FREE_SPEED_V2,
+        geometry=_UNIT_SQUARE_10,
     )
 
 
@@ -54,9 +110,7 @@ def test_initial_parameters_collision_free_speed_model_v2(
     journey_id = sim.add_journey(jps.JourneyDescription([wp]))
 
     # Create an agent with distinct non-default values for each parameter.
-    params = jps.CollisionFreeSpeedModelV2AgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
+    state = jps.CollisionFreeSpeedModelV2State(
         position=(1, 1),
         time_gap=0.1,
         desired_speed=0.12,
@@ -66,7 +120,7 @@ def test_initial_parameters_collision_free_speed_model_v2(
         strength_geometry_repulsion=0.16,
         range_geometry_repulsion=0.17,
     )
-    agent_id = sim.add_agent(params)
+    agent_id = sim.add_agent(journey_id, wp, state)
 
     agent_model = sim.agent(agent_id).model
     assert agent_model.time_gap == 0.1, (
@@ -99,12 +153,9 @@ def test_set_model_parameters_collision_free_speed_model_v2(
     wp = sim.add_waypoint_stage((10, 1), 0.5)
     journey_id = sim.add_journey(jps.JourneyDescription([wp]))
 
-    agent = jps.CollisionFreeSpeedModelV2AgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
+    agent_id = sim.add_agent(
+        journey_id, wp, jps.CollisionFreeSpeedModelV2State(position=(1, 1))
     )
-    agent_id = sim.add_agent(agent)
 
     sim.agent(agent_id).model.desired_speed = 2.0
     assert sim.agent(agent_id).model.desired_speed == 2.0
@@ -131,52 +182,11 @@ def test_set_model_parameters_collision_free_speed_model_v2(
     assert sim.agent(agent_id).model.range_geometry_repulsion == 8.0
 
 
-def test_collision_free_speed_model_v2_agent_paramters_v0_setter_deprecated(
-    simulation_with_collision_free_speed_model_v2,
-):
-    sim = simulation_with_collision_free_speed_model_v2
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.CollisionFreeSpeedModelV2AgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'desired_speed' instead"
-    ):
-        agent.v0 = 3
-        assert agent.desired_speed == 3
-
-
-def test_collision_free_speed_model_v2_agent_paramters_v0_getter_deprecated(
-    simulation_with_collision_free_speed_model_v2,
-):
-    sim = simulation_with_collision_free_speed_model_v2
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.CollisionFreeSpeedModelV2AgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    desired_speed = agent.desired_speed
-    with pytest.warns(
-        DeprecationWarning,
-        match="deprecated, use 'desired_speed' instead",
-    ):
-        assert agent.v0 == desired_speed
-
-
 @pytest.fixture
 def simulation_with_anticipation_velocity_model():
     return jps.Simulation(
-        model=jps.AnticipationVelocityModel(),
-        geometry=[(0, 0), (10, 0), (10, 10), (0, 10)],
+        model=jps.AnticipationVelocityModel(rng_seed=1234),
+        geometry=_UNIT_SQUARE_10,
     )
 
 
@@ -187,12 +197,9 @@ def test_set_model_parameters_anticipation_velocity_model(
     wp = sim.add_waypoint_stage((10, 1), 0.5)
     journey_id = sim.add_journey(jps.JourneyDescription([wp]))
 
-    agent = jps.AnticipationVelocityModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
+    agent_id = sim.add_agent(
+        journey_id, wp, jps.AnticipationVelocityModelState(position=(1, 1))
     )
-    agent_id = sim.add_agent(agent)
 
     sim.agent(agent_id).model.desired_speed = 2.0
     assert sim.agent(agent_id).model.desired_speed == 2.0
@@ -225,8 +232,8 @@ def test_set_model_parameters_anticipation_velocity_model(
 @pytest.fixture
 def simulation_with_collision_free_speed_model():
     return jps.Simulation(
-        model=jps.CollisionFreeSpeedModel(),
-        geometry=[(0, 0), (10, 0), (10, 10), (0, 10)],
+        model=jps.ModelType.COLLISION_FREE_SPEED,
+        geometry=_UNIT_SQUARE_10,
     )
 
 
@@ -237,12 +244,9 @@ def test_set_model_parameters_collision_free_speed_model(
     wp = sim.add_waypoint_stage((10, 1), 0.5)
     journey_id = sim.add_journey(jps.JourneyDescription([wp]))
 
-    agent = jps.CollisionFreeSpeedModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
+    agent_id = sim.add_agent(
+        journey_id, wp, jps.CollisionFreeSpeedModelState(position=(1, 1))
     )
-    agent_id = sim.add_agent(agent)
 
     sim.agent(agent_id).model.desired_speed = 2.0
     assert sim.agent(agent_id).model.desired_speed == 2.0
@@ -257,52 +261,50 @@ def test_set_model_parameters_collision_free_speed_model(
     assert sim.agent(agent_id).model.radius == 4.0
 
 
-def test_collision_free_speed_model_agent_paramters_v0_setter_deprecated(
+def test_collision_free_speed_model_per_agent_repulsion_parameters(
     simulation_with_collision_free_speed_model,
 ):
+    """Formerly model-global parameters are now per-agent state."""
     sim = simulation_with_collision_free_speed_model
     wp = sim.add_waypoint_stage((10, 1), 0.5)
     journey_id = sim.add_journey(jps.JourneyDescription([wp]))
 
-    agent = jps.CollisionFreeSpeedModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
+    first_id = sim.add_agent(
+        journey_id,
+        wp,
+        jps.CollisionFreeSpeedModelState(
+            position=(1, 1),
+            strength_neighbor_repulsion=7.5,
+            range_neighbor_repulsion=0.2,
+            strength_geometry_repulsion=4.5,
+            range_geometry_repulsion=0.03,
+        ),
+    )
+    second_id = sim.add_agent(
+        journey_id,
+        wp,
+        jps.CollisionFreeSpeedModelState(position=(3, 3)),
     )
 
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'desired_speed' instead"
-    ):
-        agent.v0 = 3
-        assert agent.desired_speed == 3
+    first_model = sim.agent(first_id).model
+    assert first_model.strength_neighbor_repulsion == 7.5
+    assert first_model.range_neighbor_repulsion == 0.2
+    assert first_model.strength_geometry_repulsion == 4.5
+    assert first_model.range_geometry_repulsion == 0.03
 
-
-def test_collision_free_speed_model_agent_paramters_v0_getter_deprecated(
-    simulation_with_collision_free_speed_model,
-):
-    sim = simulation_with_collision_free_speed_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.CollisionFreeSpeedModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    desired_speed = agent.desired_speed
-    with pytest.warns(
-        DeprecationWarning,
-        match="deprecated, use 'desired_speed' instead",
-    ):
-        assert agent.v0 == desired_speed
+    # The second agent keeps the defaults, i.e. the values are per-agent.
+    second_model = sim.agent(second_id).model
+    assert second_model.strength_neighbor_repulsion == 8.0
+    assert second_model.range_neighbor_repulsion == 0.1
+    assert second_model.strength_geometry_repulsion == 5.0
+    assert second_model.range_geometry_repulsion == 0.02
 
 
 @pytest.fixture
 def simulation_with_generalized_centrifugal_force_model():
     return jps.Simulation(
-        model=jps.GeneralizedCentrifugalForceModel(),
-        geometry=[(0, 0), (10, 0), (10, 10), (0, 10)],
+        model=jps.ModelType.GENERALIZED_CENTRIFUGAL_FORCE,
+        geometry=_UNIT_SQUARE_10,
     )
 
 
@@ -313,19 +315,20 @@ def test_set_model_parameters_generalized_centrifugal_force_model(
     wp = sim.add_waypoint_stage((10, 1), 0.5)
     journey_id = sim.add_journey(jps.JourneyDescription([wp]))
 
-    agent = jps.GeneralizedCentrifugalForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
+    agent_id = sim.add_agent(
+        journey_id,
+        wp,
+        jps.GeneralizedCentrifugalForceModelState(
+            position=(1, 1), orientation=(1.0, 0.0)
+        ),
     )
-    agent2 = jps.GeneralizedCentrifugalForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(3, 1),
+    sim.add_agent(
+        journey_id,
+        wp,
+        jps.GeneralizedCentrifugalForceModelState(
+            position=(3, 1), orientation=(1.0, 0.0)
+        ),
     )
-
-    agent_id = sim.add_agent(agent)
-    sim.add_agent(agent2)
 
     sim.agent(agent_id).model.speed = 2.0
     assert sim.agent(agent_id).model.speed == 2.0
@@ -355,204 +358,12 @@ def test_set_model_parameters_generalized_centrifugal_force_model(
     assert sim.agent(agent_id).model.b_max == 9.0
 
 
-def test_generalized_centrifugal_force_model_agent_paramters_e0_constructor_deprecated(
-    simulation_with_generalized_centrifugal_force_model,
-):
-    sim = simulation_with_generalized_centrifugal_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'desired_direction' instead"
-    ):
-        agent = jps.GeneralizedCentrifugalForceModelAgentParameters(
-            journey_id=journey_id, stage_id=wp, position=(1, 1), e0=(1, 2)
-        )
-        assert agent.desired_direction == (1, 2)
-
-
-def test_generalized_centrifugal_force_model_agent_paramters_e0_setter_deprecated(
-    simulation_with_generalized_centrifugal_force_model,
-):
-    sim = simulation_with_generalized_centrifugal_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.GeneralizedCentrifugalForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-        desired_direction=(1, 2),
-    )
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'desired_direction' instead"
-    ):
-        agent.e0 = (2, 1)
-        assert agent.desired_direction == (2, 1)
-
-
-def test_generalized_centrifugal_force_model_agent_paramters_e0_getter_deprecated(
-    simulation_with_generalized_centrifugal_force_model,
-):
-    sim = simulation_with_generalized_centrifugal_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.GeneralizedCentrifugalForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-        desired_direction=(1, 2),
-    )
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'desired_direction' instead"
-    ):
-        desired_direction = agent.e0
-        assert desired_direction == (1, 2)
-
-
-@pytest.fixture
-def simulation_with_social_force_model_body_force():
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'body_force' instead"
-    ):
-        return jps.Simulation(
-            model=jps.SocialForceModel(bodyForce=3),
-            geometry=[(0, 0), (10, 0), (10, 10), (0, 10)],
-        )
-
-
-def test_social_force_model_body_force_setter_deprecated():
-    model = jps.SocialForceModel()
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'body_force' instead"
-    ):
-        model.bodyForce = 5
-        assert model.body_force == 5
-
-
-def test_social_force_model_body_force_getter_deprecated():
-    model = jps.SocialForceModel()
-    model.body_force = 5
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'body_force' instead"
-    ):
-        assert model.bodyForce == 5
-
-
-def test_body_force_deprecated(simulation_with_social_force_model_body_force):
-    assert simulation_with_social_force_model_body_force is not None
-
-
 @pytest.fixture
 def simulation_with_social_force_model():
     return jps.Simulation(
-        model=jps.SocialForceModel(),
-        geometry=[(0, 0), (10, 0), (10, 10), (0, 10)],
+        model=jps.ModelType.SOCIAL_FORCE,
+        geometry=_UNIT_SQUARE_10,
     )
-
-
-def test_desired_speed_deprecated(simulation_with_social_force_model):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id, stage_id=wp, position=(1, 1), desired_speed=1.1
-    )
-    agent_id = sim.add_agent(agent)
-
-    # Check if the deprecation warning is raised
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'desired_speed' instead"
-    ):
-        sim.agent(agent_id).model.desiredSpeed = 1.5
-        assert sim.agent(agent_id).model.desiredSpeed == 1.5
-
-    # Verify the new snake_case property reflects the same value
-    assert sim.agent(agent_id).model.desired_speed == 1.5
-
-
-def test_reaction_time_deprecated(simulation_with_social_force_model):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id, stage_id=wp, position=(1, 1), reaction_time=1.1
-    )
-    agent_id = sim.add_agent(agent)
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'reaction_time' instead"
-    ):
-        sim.agent(agent_id).model.reactionTime = 5.0
-        assert sim.agent(agent_id).model.reactionTime == 5.0
-
-    assert sim.agent(agent_id).model.reaction_time == 5.0
-
-
-def test_agent_scale_deprecated(simulation_with_social_force_model):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-        agent_scale=1.1,
-    )
-    agent_id = sim.add_agent(agent)
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'agent_scale' instead"
-    ):
-        sim.agent(agent_id).model.agentScale = 6.0
-        assert sim.agent(agent_id).model.agentScale == 6.0
-
-    assert sim.agent(agent_id).model.agent_scale == 6.0
-
-
-def test_obstacle_scale_deprecated(simulation_with_social_force_model):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id, stage_id=wp, position=(1, 1), obstacle_scale=1.1
-    )
-    agent_id = sim.add_agent(agent)
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'obstacle_scale' instead"
-    ):
-        sim.agent(agent_id).model.obstacleScale = 7.0
-        assert sim.agent(agent_id).model.obstacleScale == 7.0
-
-    assert sim.agent(agent_id).model.obstacle_scale == 7.0
-
-
-def test_force_distance_deprecated(simulation_with_social_force_model):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id, stage_id=wp, position=(1, 1), force_distance=1.1
-    )
-    agent_id = sim.add_agent(agent)
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'force_distance' instead"
-    ):
-        sim.agent(agent_id).model.forceDistance = 8.0
-        assert sim.agent(agent_id).model.forceDistance == 8.0
-
-    assert sim.agent(agent_id).model.force_distance == 8.0
 
 
 def test_set_model_parameters_social_force_model(
@@ -563,12 +374,9 @@ def test_set_model_parameters_social_force_model(
     wp = sim.add_waypoint_stage((10, 1), 0.5)
     journey_id = sim.add_journey(jps.JourneyDescription([wp]))
 
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
+    agent_id = sim.add_agent(
+        journey_id, wp, jps.SocialForceModelState(position=(1, 1))
     )
-    agent_id = sim.add_agent(agent)
 
     sim.agent(agent_id).model.velocity = (2.0, -2.0)
     assert sim.agent(agent_id).model.velocity == (2.0, -2.0)
@@ -595,216 +403,72 @@ def test_set_model_parameters_social_force_model(
     assert sim.agent(agent_id).model.radius == 9.0
 
 
-def test_social_force_model_agent_paramters_desired_speed_setter_deprecated(
+def test_social_force_model_per_agent_body_force_and_friction(
+    simulation_with_social_force_model,
+):
+    """body_force and friction used to be model-global, now per-agent."""
+    sim = simulation_with_social_force_model
+    wp = sim.add_waypoint_stage((10, 1), 0.5)
+    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
+
+    first_id = sim.add_agent(
+        journey_id,
+        wp,
+        jps.SocialForceModelState(
+            position=(1, 1), body_force=100000.0, friction=200000.0
+        ),
+    )
+    second_id = sim.add_agent(
+        journey_id, wp, jps.SocialForceModelState(position=(3, 3))
+    )
+
+    assert sim.agent(first_id).model.body_force == 100000.0
+    assert sim.agent(first_id).model.friction == 200000.0
+
+    # The second agent keeps the defaults, i.e. the values are per-agent.
+    assert sim.agent(second_id).model.body_force == 120000.0
+    assert sim.agent(second_id).model.friction == 240000.0
+
+    # Per-agent values are mutable through the handle.
+    sim.agent(second_id).model.body_force = 90000.0
+    assert sim.agent(second_id).model.body_force == 90000.0
+    assert sim.agent(first_id).model.body_force == 100000.0
+
+
+def test_agent_handle_raises_after_removal(
     simulation_with_social_force_model,
 ):
     sim = simulation_with_social_force_model
     wp = sim.add_waypoint_stage((10, 1), 0.5)
     journey_id = sim.add_journey(jps.JourneyDescription([wp]))
 
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
+    agent_id = sim.add_agent(
+        journey_id, wp, jps.SocialForceModelState(position=(1, 1))
     )
+    agent = sim.agent(agent_id)
+    model = agent.model
+    assert agent.position == (1, 1)
 
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'desired_speed' instead"
-    ):
-        agent.desiredSpeed = 3
-        assert agent.desired_speed == 3
+    sim.mark_agent_for_removal(agent_id)
+    sim.iterate()
 
-
-def test_social_force_model_agent_paramters_desired_speed_getter_deprecated(
-    simulation_with_social_force_model,
-):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    desired_speed = agent.desired_speed
-    with pytest.warns(
-        DeprecationWarning,
-        match="deprecated, use 'desired_speed' instead",
-    ):
-        assert agent.desiredSpeed == desired_speed
-
-
-def test_social_force_model_agent_paramters_reaction_time_setter_deprecated(
-    simulation_with_social_force_model,
-):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'reaction_time' instead"
-    ):
-        agent.reactionTime = 3
-        assert agent.reaction_time == 3
-
-
-def test_social_force_model_agent_paramters_reaction_time_getter_deprecated(
-    simulation_with_social_force_model,
-):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    reaction_time = agent.reaction_time
-    with pytest.warns(
-        DeprecationWarning,
-        match="deprecated, use 'reaction_time' instead",
-    ):
-        assert agent.reactionTime == reaction_time
-
-
-def test_social_force_model_agent_paramters_agent_scale_setter_deprecated(
-    simulation_with_social_force_model,
-):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'agent_scale' instead"
-    ):
-        agent.agentScale = 3
-        assert agent.agent_scale == 3
-
-
-def test_social_force_model_agent_paramters_agent_scale_getter_deprecated(
-    simulation_with_social_force_model,
-):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    agent_scale = agent.agent_scale
-    with pytest.warns(
-        DeprecationWarning,
-        match="deprecated, use 'agent_scale' instead",
-    ):
-        assert agent.agentScale == agent_scale
-
-
-def test_social_force_model_agent_paramters_obstacle_scale_setter_deprecated(
-    simulation_with_social_force_model,
-):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'obstacle_scale' instead"
-    ):
-        agent.obstacleScale = 3
-        assert agent.obstacle_scale == 3
-
-
-def test_social_force_model_agent_paramters_obstacle_scale_getter_deprecated(
-    simulation_with_social_force_model,
-):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    obstacle_scale = agent.obstacle_scale
-    with pytest.warns(
-        DeprecationWarning,
-        match="deprecated, use 'obstacle_scale' instead",
-    ):
-        assert agent.obstacleScale == obstacle_scale
-
-
-def test_social_force_model_agent_paramters_force_distance_setter_deprecated(
-    simulation_with_social_force_model,
-):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    with pytest.warns(
-        DeprecationWarning, match="deprecated, use 'force_distance' instead"
-    ):
-        agent.forceDistance = 3
-        assert agent.force_distance == 3
-
-
-def test_social_force_model_agent_paramters_force_distance_getter_deprecated(
-    simulation_with_social_force_model,
-):
-    sim = simulation_with_social_force_model
-    wp = sim.add_waypoint_stage((10, 1), 0.5)
-    journey_id = sim.add_journey(jps.JourneyDescription([wp]))
-
-    agent = jps.SocialForceModelAgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
-    )
-
-    force_distance = agent.force_distance
-    with pytest.warns(
-        DeprecationWarning,
-        match="deprecated, use 'force_distance' instead",
-    ):
-        assert agent.forceDistance == force_distance
+    with pytest.raises(jps.SimulationError):
+        agent.position
+    with pytest.raises(jps.SimulationError):
+        agent.model.desired_speed
+    with pytest.raises(jps.SimulationError):
+        model.desired_speed
+    with pytest.raises(jps.SimulationError):
+        model.desired_speed = 1.0
+    with pytest.raises(jps.SimulationError):
+        sim.agent(agent_id)
 
 
 @pytest.fixture
 def simulation_with_collision_free_speed_model_v3():
     return jps.Simulation(
-        model=jps.CollisionFreeSpeedModelV3(),
-        geometry=[(0, 0), (10, 0), (10, 10), (0, 10)],
+        model=jps.ModelType.COLLISION_FREE_SPEED_V3,
+        geometry=_UNIT_SQUARE_10,
     )
 
 
@@ -815,9 +479,7 @@ def test_initial_parameters_collision_free_speed_model_v3(
     wp = sim.add_waypoint_stage((10, 1), 0.5)
     journey_id = sim.add_journey(jps.JourneyDescription([wp]))
 
-    params = jps.CollisionFreeSpeedModelV3AgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
+    state = jps.CollisionFreeSpeedModelV3State(
         position=(1, 1),
         time_gap=0.11,
         desired_speed=0.12,
@@ -831,7 +493,7 @@ def test_initial_parameters_collision_free_speed_model_v3(
         theta_max_upper_bound=0.8,
         agent_buffer=0.4,
     )
-    agent_id = sim.add_agent(params)
+    agent_id = sim.add_agent(journey_id, wp, state)
 
     agent_model = sim.agent(agent_id).model
     assert agent_model.time_gap == 0.11
@@ -854,12 +516,17 @@ def test_set_model_parameters_collision_free_speed_model_v3(
     wp = sim.add_waypoint_stage((10, 1), 0.5)
     journey_id = sim.add_journey(jps.JourneyDescription([wp]))
 
-    agent = jps.CollisionFreeSpeedModelV3AgentParameters(
-        journey_id=journey_id,
-        stage_id=wp,
-        position=(1, 1),
+    agent_id = sim.add_agent(
+        journey_id,
+        wp,
+        jps.CollisionFreeSpeedModelV3State(
+            position=(1, 1),
+            strength_neighbor_repulsion=8.0,
+            range_neighbor_repulsion=0.1,
+            strength_geometry_repulsion=5.0,
+            range_geometry_repulsion=0.02,
+        ),
     )
-    agent_id = sim.add_agent(agent)
     model = sim.agent(agent_id).model
 
     model.desired_speed = 2.0

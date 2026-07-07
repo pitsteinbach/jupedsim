@@ -21,7 +21,7 @@ def square_simulation(tmp_path: pathlib.Path):
         output_file=out_filename, every_nth_frame=1, compression_level=1
     )
     sim = jps.Simulation(
-        model=jps.CollisionFreeSpeedModelV2(),
+        model=jps.ModelType.COLLISION_FREE_SPEED_V2,
         geometry=area,
         trajectory_writer=writer,
         dt=0.01,
@@ -32,9 +32,9 @@ def square_simulation(tmp_path: pathlib.Path):
     journey_id = sim.add_journey(jps.JourneyDescription([exit_id]))
     for x, y in [(2, 5), (3, 4), (3, 6)]:
         sim.add_agent(
-            jps.CollisionFreeSpeedModelV2AgentParameters(
-                position=(x, y), journey_id=journey_id, stage_id=exit_id
-            )
+            journey_id,
+            exit_id,
+            jps.CollisionFreeSpeedModelV2State(position=(x, y)),
         )
     for _ in range(50):
         sim.iterate()
@@ -93,7 +93,7 @@ def test_close_is_idempotent(tmp_path):
     out = tmp_path / "empty.h5"
     writer = jps.Hdf5TrajectoryWriter(output_file=out, every_nth_frame=1)
     sim = jps.Simulation(
-        model=jps.CollisionFreeSpeedModelV2(),
+        model=jps.ModelType.COLLISION_FREE_SPEED_V2,
         geometry=area,
         trajectory_writer=writer,
         dt=0.01,

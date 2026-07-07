@@ -9,7 +9,7 @@ def test_geometry_holes_returns_coordinates():
     poly = shapely.Polygon(outer, holes=[hole])
 
     simulation = jps.Simulation(
-        model=jps.CollisionFreeSpeedModel(),
+        model=jps.ModelType.COLLISION_FREE_SPEED,
         geometry=poly,
     )
     geo = simulation.get_geometry()

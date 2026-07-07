@@ -19,8 +19,6 @@ public:
         double timeGap{1};
         double v0{1.2};
         double radius{0.2};
-        // Configured simulation-wide via the builder; stamped into every agent
-        // by InitializeAgent, not settable per agent through the Python API.
         double strengthNeighborRepulsion{8.0};
         double rangeNeighborRepulsion{0.1};
         double strengthGeometryRepulsion{5.0};
@@ -29,20 +27,11 @@ public:
 
 private:
     double _cutOffRadius{3};
-    double strengthNeighborRepulsion;
-    double rangeNeighborRepulsion;
-    double strengthGeometryRepulsion;
-    double rangeGeometryRepulsion;
 
 public:
-    CollisionFreeSpeedModel(
-        double strengthNeighborRepulsion,
-        double rangeNeighborRepulsion,
-        double strengthGeometryRepulsion,
-        double rangeGeometryRepulsion);
+    CollisionFreeSpeedModel() = default;
     ~CollisionFreeSpeedModel() override = default;
     OperationalModelType Type() const override;
-    void InitializeAgent(GenericAgent& agent) const override;
     void ComputeNext(
         double dT,
         const GenericAgent& current,

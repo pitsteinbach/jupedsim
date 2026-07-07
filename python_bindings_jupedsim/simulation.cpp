@@ -2,12 +2,15 @@
 #include "Simulation.hpp"
 
 #include "CollisionGeometry.hpp"
+#include "GenericAgent.hpp"
 #include "Journey.hpp"
 #include "OperationalModel.hpp"
+#include "OperationalModels/OperationalModelType.hpp"
 #include "Polygon.hpp"
 #include "Stage.hpp"
 #include "StageDescription.hpp"
 #include "conversion.hpp"
+#include "type_casters.hpp" // IWYU pragma: keep
 
 #include <pybind11/attr.h>
 #include <pybind11/cast.h>
@@ -24,8 +27,35 @@
 
 namespace py = pybind11;
 
+namespace
+{
+/// Creates an agent from a per-model state object. The agent position is read
+/// from the state itself; every model state carries its own position.
+template <typename State>
+uint64_t
+AddAgentWithState(Simulation& sim, uint64_t journeyId, uint64_t stageId, const State& state)
+{
+    const Point position = state.position;
+    return sim
+        .AddAgent(GenericAgent(GenericAgent::ID::Invalid, journeyId, stageId, position, state))
+        .getID();
+}
+} // namespace
+
 void init_simulation(py::module_& m)
 {
+    // Only stateless built-in models are exposed as enum members. Models with
+    // simulation-global state (AnticipationVelocityModel, WarpDriverModel) and
+    // custom Python models must be passed to Simulation as instances.
+    py::enum_<OperationalModelType>(m, "ModelType")
+        .value("COLLISION_FREE_SPEED", OperationalModelType::COLLISION_FREE_SPEED)
+        .value("COLLISION_FREE_SPEED_V2", OperationalModelType::COLLISION_FREE_SPEED_V2)
+        .value("COLLISION_FREE_SPEED_V3", OperationalModelType::COLLISION_FREE_SPEED_V3)
+        .value(
+            "GENERALIZED_CENTRIFUGAL_FORCE",
+            OperationalModelType::GENERALIZED_CENTRIFUGAL_FORCE)
+        .value("SOCIAL_FORCE", OperationalModelType::SOCIAL_FORCE);
+
     py::class_<Simulation>(m, "Simulation")
         .def(
             // The model is moved out of the Python object into Simulation. After this constructor
@@ -78,7 +108,52 @@ void init_simulation(py::module_& m)
             })
         .def(
             "add_agent",
-            [](Simulation& sim, GenericAgent& agent) { return sim.AddAgent(agent).getID(); })
+            &AddAgentWithState<GeneralizedCentrifugalForceModel::Agent>,
+            py::arg("journey_id"),
+            py::arg("stage_id"),
+            py::arg("state"))
+        .def(
+            "add_agent",
+            &AddAgentWithState<CollisionFreeSpeedModel::Agent>,
+            py::arg("journey_id"),
+            py::arg("stage_id"),
+            py::arg("state"))
+        .def(
+            "add_agent",
+            &AddAgentWithState<CollisionFreeSpeedModelV2::Agent>,
+            py::arg("journey_id"),
+            py::arg("stage_id"),
+            py::arg("state"))
+        .def(
+            "add_agent",
+            &AddAgentWithState<CollisionFreeSpeedModelV3::Agent>,
+            py::arg("journey_id"),
+            py::arg("stage_id"),
+            py::arg("state"))
+        .def(
+            "add_agent",
+            &AddAgentWithState<AnticipationVelocityModel::Agent>,
+            py::arg("journey_id"),
+            py::arg("stage_id"),
+            py::arg("state"))
+        .def(
+            "add_agent",
+            &AddAgentWithState<SocialForceModel::Agent>,
+            py::arg("journey_id"),
+            py::arg("stage_id"),
+            py::arg("state"))
+        .def(
+            "add_agent",
+            &AddAgentWithState<WarpDriverModel::Agent>,
+            py::arg("journey_id"),
+            py::arg("stage_id"),
+            py::arg("state"))
+        .def(
+            "add_agent",
+            &AddAgentWithState<CustomModelData>,
+            py::arg("journey_id"),
+            py::arg("stage_id"),
+            py::arg("state"))
         .def(
             "mark_agent_for_removal",
             [](Simulation& sim, uint64_t id) { sim.MarkAgentForRemoval(id); })
@@ -112,6 +187,10 @@ void init_simulation(py::module_& m)
             [](Simulation& sim) { return py::make_iterator(sim.Agents()); },
             py::keep_alive<0, 1>())
         .def(
+            // TRANSIENT ONLY: the returned object wraps a raw reference into the
+            // simulation's agent storage. It must not be stored across iterate();
+            // callers (Python agent handles) resolve it freshly inside every
+            // property access.
             "agent",
             [](Simulation& sim, uint64_t agentId) -> auto& { return sim.Agent(agentId); },
             py::arg("agent_id"),

@@ -7,7 +7,7 @@ import shapely
 @pytest.fixture
 def square_room_5x5():
     simulation = jps.Simulation(
-        model=jps.CollisionFreeSpeedModel(),
+        model=jps.ModelType.COLLISION_FREE_SPEED,
         geometry=[(-2.5, -2.5), (2.5, -2.5), (2.5, 2.5), (-2.5, 2.5)],
     )
     return simulation
@@ -16,7 +16,7 @@ def square_room_5x5():
 @pytest.fixture
 def square_room_5x5_with_obstacle():
     simulation = jps.Simulation(
-        model=jps.CollisionFreeSpeedModel(),
+        model=jps.ModelType.COLLISION_FREE_SPEED,
         geometry=shapely.Polygon(
             [(-2.5, -2.5), (2.5, -2.5), (2.5, 2.5), (-2.5, 2.5)],
             [[(-0.5, -0.5), (-0.5, 0.5), (0.5, 0.5), (0.5, -0.5)]],
@@ -47,7 +47,7 @@ def test_can_share_queue_between_stages():
     )
 
     simulation = jps.Simulation(
-        model=jps.CollisionFreeSpeedModel(), geometry=polygon
+        model=jps.ModelType.COLLISION_FREE_SPEED, geometry=polygon
     )
 
     wp_j1 = simulation.add_waypoint_stage((-1, 0), 0.5)
@@ -101,13 +101,12 @@ def test_can_share_queue_between_stages():
         ((5.5, 0), journeys[1]),
     ]
 
-    agent_parameters = jps.CollisionFreeSpeedModelAgentParameters()
-
     for pos, (journey_id, stage_id) in agents:
-        agent_parameters.position = pos
-        agent_parameters.journey_id = journey_id
-        agent_parameters.stage_id = stage_id
-        simulation.add_agent(agent_parameters)
+        simulation.add_agent(
+            journey_id,
+            stage_id,
+            jps.CollisionFreeSpeedModelState(position=pos),
+        )
 
     while simulation.agent_count() > 0:
         if simulation.iteration_count() % 4 == 0:
@@ -136,7 +135,7 @@ def test_can_use_stage_proxy():
     )
 
     simulation = jps.Simulation(
-        model=jps.CollisionFreeSpeedModel(), geometry=polygon
+        model=jps.ModelType.COLLISION_FREE_SPEED, geometry=polygon
     )
 
     exit_id = simulation.add_exit_stage(
@@ -167,11 +166,11 @@ def test_can_use_stage_proxy():
     assert exit.count_targeting() == 0
     assert waypoint.count_targeting() == 0
 
-    agent_parameters = jps.CollisionFreeSpeedModelAgentParameters()
-    agent_parameters.position = (-9.5, 0)
-    agent_parameters.journey_id = exit_journey_id
-    agent_parameters.stage_id = exit_id
-    agent_id = simulation.add_agent(agent_parameters)
+    agent_id = simulation.add_agent(
+        exit_journey_id,
+        exit_id,
+        jps.CollisionFreeSpeedModelState(position=(-9.5, 0)),
+    )
 
     assert exit.count_targeting() == 1
     assert waypoint.count_targeting() == 0
@@ -210,7 +209,7 @@ def test_can_not_add_waypoint_outside_geometry(square_room_5x5):
     simulation = square_room_5x5
 
     with pytest.raises(
-        RuntimeError, match="WayPoint .* not inside walkable area"
+        jps.SimulationError, match="WayPoint .* not inside walkable area"
     ):
         simulation.add_waypoint_stage((10, 10), 1)
 
@@ -218,7 +217,9 @@ def test_can_not_add_waypoint_outside_geometry(square_room_5x5):
 def test_can_not_add_exit_completely_outside_geometry(square_room_5x5):
     simulation = square_room_5x5
 
-    with pytest.raises(RuntimeError, match=r"Exit .* not inside walkable area"):
+    with pytest.raises(
+        jps.SimulationError, match=r"Exit .* not inside walkable area"
+    ):
         simulation.add_exit_stage([(-10, -10), (-8, -10), (-8, -8), (-10, -8)])
 
 
@@ -232,7 +233,9 @@ def test_can_not_add_exit_partly_outside_geometry_centroid_outside(
 ):
     simulation = square_room_5x5
 
-    with pytest.raises(RuntimeError, match=r"Exit .* not inside walkable area"):
+    with pytest.raises(
+        jps.SimulationError, match=r"Exit .* not inside walkable area"
+    ):
         simulation.add_exit_stage([(-4, -4), (-4, -2), (-2, -2), (-2, -4)])
 
 
@@ -240,7 +243,7 @@ def test_can_not_add_notifiable_waiting_set_outside_geometry(square_room_5x5):
     simulation = square_room_5x5
 
     with pytest.raises(
-        RuntimeError,
+        jps.SimulationError,
         match=r"NotifiableWaitingSet point .* not inside walkable area",
     ):
         simulation.add_waiting_set_stage([(2, -2), (-10, -10)])
@@ -250,7 +253,7 @@ def test_can_not_add_notifiable_queue_outside_geometry(square_room_5x5):
     simulation = square_room_5x5
 
     with pytest.raises(
-        RuntimeError,
+        jps.SimulationError,
         match=r"NotifiableQueue point .* not inside walkable area",
     ):
         simulation.add_queue_stage([(2, -2), (-10, -10)])

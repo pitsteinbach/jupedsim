@@ -16,42 +16,9 @@
 #include <optional>
 #include <stdexcept>
 
-GeneralizedCentrifugalForceModel::GeneralizedCentrifugalForceModel(
-    double strengthNeighborRepulsion_,
-    double strengthGeometryRepulsion_,
-    double maxNeighborInteractionDistance_,
-    double maxGeometryInteractionDistance_,
-    double maxNeighborInterpolationDistance_,
-    double maxGeometryInterpolationDistance_,
-    double maxNeighborRepulsionForce_,
-    double maxGeometryRepulsionForce_)
-    : strengthNeighborRepulsion(strengthNeighborRepulsion_)
-    , strengthGeometryRepulsion(strengthGeometryRepulsion_)
-    , maxNeighborInteractionDistance(maxNeighborInteractionDistance_)
-    , maxGeometryInteractionDistance(maxGeometryInteractionDistance_)
-    , maxNeighborInterpolationDistance(maxNeighborInterpolationDistance_)
-    , maxGeometryInterpolationDistance(maxGeometryInterpolationDistance_)
-    , maxNeighborRepulsionForce(maxNeighborRepulsionForce_)
-    , maxGeometryRepulsionForce(maxGeometryRepulsionForce_)
-{
-}
-
 OperationalModelType GeneralizedCentrifugalForceModel::Type() const
 {
     return OperationalModelType::GENERALIZED_CENTRIFUGAL_FORCE;
-}
-
-void GeneralizedCentrifugalForceModel::InitializeAgent(GenericAgent& agent) const
-{
-    auto& model = std::get<Agent>(agent.model);
-    model.strengthNeighborRepulsion = strengthNeighborRepulsion;
-    model.strengthGeometryRepulsion = strengthGeometryRepulsion;
-    model.maxNeighborInteractionDistance = maxNeighborInteractionDistance;
-    model.maxGeometryInteractionDistance = maxGeometryInteractionDistance;
-    model.maxNeighborInterpolationDistance = maxNeighborInterpolationDistance;
-    model.maxGeometryInterpolationDistance = maxGeometryInterpolationDistance;
-    model.maxNeighborRepulsionForce = maxNeighborRepulsionForce;
-    model.maxGeometryRepulsionForce = maxGeometryRepulsionForce;
 }
 
 void GeneralizedCentrifugalForceModel::ComputeNext(

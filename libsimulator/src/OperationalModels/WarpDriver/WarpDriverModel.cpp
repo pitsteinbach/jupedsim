@@ -317,46 +317,23 @@ STP ComposeGradientInverse(const Point& gradI, const STP& sOriginal, const WarpP
 // WarpDriverModel
 // ============================================================================
 
-WarpDriverModel::WarpDriverModel(
-    double timeHorizon,
-    double stepSize,
-    double sigma,
-    double timeUncertainty,
-    double velocityUncertaintyX,
-    double velocityUncertaintyY,
-    int numSamples,
-    uint64_t rngSeed)
-    : _timeHorizon(timeHorizon)
-    , _stepSize(stepSize)
-    , _timeUncertainty(timeUncertainty)
-    , _velocityUncertaintyX(velocityUncertaintyX)
-    , _velocityUncertaintyY(velocityUncertaintyY)
-    , _numSamples(numSamples)
+WarpDriverModel::WarpDriverModel(double sigma, uint64_t rngSeed)
     // Neighborhood cutoff: maximum distance at which a neighbor can still
-    // collide with us within timeHorizon. Two agents closing head-on cover
-    // 2 * v_max * timeHorizon, plus their combined radii, plus a small margin.
-    // v_max and r_max are hardcoded pedestrian defaults; promote to constructor
-    // parameters if mixed-speed populations need a tighter or wider cutoff.
-    , _cutOffRadius(2.0 * 1.5 * timeHorizon + 2.0 * 0.3 + 0.5)
-    , _rng(rngSeed)
+    // collide with us within the default per-agent timeHorizon (2.0 s). Two
+    // agents closing head-on cover 2 * v_max * timeHorizon, plus their combined
+    // radii, plus a small margin. v_max and r_max are hardcoded pedestrian
+    // defaults.
+    : _cutOffRadius(2.0 * 1.5 * 2.0 + 2.0 * 0.3 + 0.5), _rng(rngSeed)
 {
+    if(sigma <= 0.0) {
+        throw SimulationError("WarpDriverModel: sigma must be > 0, got {}", sigma);
+    }
     _intrinsicField.Compute(sigma);
 }
 
 OperationalModelType WarpDriverModel::Type() const
 {
     return OperationalModelType::WARP_DRIVER;
-}
-
-void WarpDriverModel::InitializeAgent(GenericAgent& agent) const
-{
-    auto& model = std::get<Agent>(agent.model);
-    model.timeHorizon = _timeHorizon;
-    model.stepSize = _stepSize;
-    model.timeUncertainty = _timeUncertainty;
-    model.velocityUncertaintyX = _velocityUncertaintyX;
-    model.velocityUncertaintyY = _velocityUncertaintyY;
-    model.numSamples = _numSamples;
 }
 
 void WarpDriverModel::CheckModelConstraint(
@@ -379,6 +356,45 @@ void WarpDriverModel::CheckModelConstraint(
     if(data->v0 < 0.0) {
         throw SimulationError(
             "WarpDriverModel constraint check: agent {} has invalid v0 {}", agent.id, data->v0);
+    }
+    if(data->timeHorizon <= 0.0) {
+        throw SimulationError(
+            "WarpDriverModel constraint check: agent {} has invalid timeHorizon {}, must be > 0",
+            agent.id,
+            data->timeHorizon);
+    }
+    if(data->stepSize <= 0.0) {
+        throw SimulationError(
+            "WarpDriverModel constraint check: agent {} has invalid stepSize {}, must be > 0",
+            agent.id,
+            data->stepSize);
+    }
+    if(data->numSamples < 1) {
+        throw SimulationError(
+            "WarpDriverModel constraint check: agent {} has invalid numSamples {}, must be >= 1",
+            agent.id,
+            data->numSamples);
+    }
+    if(data->timeUncertainty < 0.0) {
+        throw SimulationError(
+            "WarpDriverModel constraint check: agent {} has invalid timeUncertainty {}, must be "
+            ">= 0",
+            agent.id,
+            data->timeUncertainty);
+    }
+    if(data->velocityUncertaintyX < 0.0) {
+        throw SimulationError(
+            "WarpDriverModel constraint check: agent {} has invalid velocityUncertaintyX {}, must "
+            "be >= 0",
+            agent.id,
+            data->velocityUncertaintyX);
+    }
+    if(data->velocityUncertaintyY < 0.0) {
+        throw SimulationError(
+            "WarpDriverModel constraint check: agent {} has invalid velocityUncertaintyY {}, must "
+            "be >= 0",
+            agent.id,
+            data->velocityUncertaintyY);
     }
 }
 

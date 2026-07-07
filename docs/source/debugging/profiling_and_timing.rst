@@ -54,7 +54,7 @@ Pass ``timer_log_level`` when creating the simulation:
     import jupedsim as jps
 
     sim = jps.Simulation(
-        model=jps.CollisionFreeSpeedModel(),
+        model=jps.ModelType.COLLISION_FREE_SPEED,
         geometry=geometry,
         timer_log_level=3,   # record everything including debug probes
     )
@@ -343,9 +343,9 @@ preserved even when the user presses :kbd:`Ctrl-C`:
 
     jps.dump_traces("full_trace.pftrace")
 
----------------------------
+----------------------------
 Combining Timing and Tracing
----------------------------
+----------------------------
 
 Both systems can be active simultaneously.  The timer gives you numbers;
 the profiler gives you a visual timeline with the same event boundaries.
@@ -356,7 +356,7 @@ the profiler gives you a visual timeline with the same event boundaries.
     import pandas as pd
 
     sim = jps.Simulation(
-        model=jps.CollisionFreeSpeedModel(),
+        model=jps.ModelType.COLLISION_FREE_SPEED,
         geometry=geometry,
         timer_log_level=2,
     )

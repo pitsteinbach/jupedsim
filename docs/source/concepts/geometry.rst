@@ -124,7 +124,7 @@ This can be done with:
     walkable_area = ...
 
     simulation = jps.Simulation(
-        model=jps.CollisionFreeSpeedModel(),
+        model=jps.ModelType.COLLISION_FREE_SPEED,
         geometry=area,
         trajectory_writer=jps.SqliteTrajectoryWriter(
             output_file=pathlib.Path("traj.sqlite")

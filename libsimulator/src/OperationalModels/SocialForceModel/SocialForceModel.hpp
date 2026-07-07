@@ -23,22 +23,17 @@ public:
         double obstacleScale{2000.0}; // A for obstacles
         double forceDistance{0.08}; // B
         double radius{0.3}; // r
-        // Configured simulation-wide via the builder; stamped into every agent
-        // by InitializeAgent, not settable per agent through the Python API.
         double bodyForce{120000}; // k
         double friction{240000}; // kappa
     };
 
 private:
     double _cutOffRadius{2.5};
-    double bodyForce;
-    double friction;
 
 public:
-    SocialForceModel(double bodyForce_, double friction_);
+    SocialForceModel() = default;
     ~SocialForceModel() override = default;
     OperationalModelType Type() const override;
-    void InitializeAgent(GenericAgent& agent) const override;
     void ComputeNext(
         double dT,
         const GenericAgent& current,
