@@ -21,16 +21,23 @@ class PythonSocialForceModel(CustomOperationalModel):
     2. Social force: repulsive forces between agents
     3. Obstacle force: repulsive forces from obstacles
 
-    Parameters:
-        desired_speed: desired walking speed [m/s], default 1.34
-        reaction_time: time to adapt to new accelerations [s], default 0.5
-        agent_scale: strength of repulsive force between agents [N], default 2000
-        obstacle_scale: strength of repulsive force from obstacles [N], default 2000
-        force_distance: range of social/obstacle forces [m], default 0.08
-        mass: mass of agents [kg], default 80
-        body_force: body contact force [kg/s²], default 120000
-        friction: friction during contact [kg/m/s], default 240000
     """
+
+    def compute_new_position(
+        self, dt: float, ped, geometry, neighborhood_search
+    ):
+        """
+        Compute new position using Social Force Model.
+
+        Args:
+            dT: time step [s]
+            ped: GenericAgent (current agent)
+            geometry: CollisionGeometry
+            neighborhood_search: NeighborhoodSearch for neighbor queries
+
+        Returns:
+            Update object with new position and velocity
+        """
 
     def __init__(
         self,
@@ -201,7 +208,10 @@ class PythonSocialForceModel(CustomOperationalModel):
         pos = agent.position
 
         # Get target direction (normalized)
-        target_diff = (agent.target[0] - pos[0], agent.target[1] - pos[1])
+        target_diff = (
+            agent.destination[0] - pos[0],
+            agent.destination[1] - pos[1],
+        )
         # eq 1 in paper
         target_dir = self._normalize(target_diff)
         # Get current velocity

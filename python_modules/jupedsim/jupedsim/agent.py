@@ -100,6 +100,10 @@ class Agent:
         """
         return self._obj.target
 
+    @property
+    def destination(self) -> tuple[float, float]:
+        return self._obj.destination
+
     @target.setter
     def target(self, target: tuple[float, float]):
         self._obj.target = target

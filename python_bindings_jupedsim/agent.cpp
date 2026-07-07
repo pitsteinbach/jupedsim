@@ -43,6 +43,8 @@ void init_agent(py::module_& m)
                 agent.target = intoPoint(target);
             })
         .def_property_readonly(
+            "destination", [](const GenericAgent& agent) { return intoTuple(agent.destination); })
+        .def_property_readonly(
             "model",
             [](GenericAgent& agent) -> auto& { return agent.model; },
             py::return_value_policy::reference);

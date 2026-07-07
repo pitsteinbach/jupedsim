@@ -74,6 +74,7 @@ from jupedsim.models.warp_driver import (
     WarpDriverModelState,
 )
 from jupedsim.neighborhood import NeighborhoodSearch
+from jupedsim.point import Point
 from jupedsim.recording import Recording, RecordingAgent, RecordingFrame
 from jupedsim.routing import RoutingEngine
 from jupedsim.serialization import TrajectoryWriter
@@ -120,6 +121,7 @@ __all__ = [
     "GeneralizedCentrifugalForceModelState",
     "Geometry",
     "LineSegment",
+    "Point",
     "IncorrectParameterError",
     "JourneyDescription",
     "NegativeValueError",

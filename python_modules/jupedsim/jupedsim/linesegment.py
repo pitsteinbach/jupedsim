@@ -45,3 +45,14 @@ class LineSegment:
             tuple[float, float]: The closest point on the line segment to the given point.
         """
         return self._obj.shortest_point(point)
+
+    def intersects(self, lineseg2: "LineSegment") -> bool:
+        from shapely.geometry import LineString
+
+        ls1 = LineString([self.p1, self.p2])
+        if isinstance(lineseg2, LineString):
+            ls2 = LineString(lineseg2)
+        else:
+            ls2 = LineString([lineseg2.p1, lineseg2.p2])
+
+        return ls1.intersects(ls2)

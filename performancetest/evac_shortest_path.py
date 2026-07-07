@@ -84,10 +84,16 @@ def main(
     sources = geo_collections.geoms[2]
     # waypoints = geo_collections.geoms[3]
     for run in range(0, number_of_runs):
+        writer = jps.SqliteTrajectoryWriter(
+            output_file=pathlib.Path(
+                f"{jps.get_build_info().git_commit_hash}_15k_evac.sqlite"
+            )
+        )
         simulation = jps.Simulation(
             model=jps.AnticipationVelocityModel(),
             geometry=geo,
             timer_log_level=3,
+            trajectory_writer=writer,
         )
 
         # jps.enable_tracing()
@@ -176,7 +182,8 @@ def main(
             try:
                 simulation.iterate()
                 dt = (time.perf_counter_ns() - start_time) / 1000000000
-                duration = simulation.timer.iteration_duration_us
+                trace = simulation.get_last_trace()
+                duration = trace.iteration_duration
                 iteration = simulation.iteration_count()
                 print(
                     f"Run: {run + 1:2d}/{number_of_runs} "
@@ -193,14 +200,16 @@ def main(
                 print("CTRL-C Received! Shutting down")
                 jps.dump_traces("evac_shortest_path_v1.prof")
                 sys.exit(1)
-
+        stop_time = time.perf_counter_ns()
+        print((start_time - stop_time) / 1000000000)
         res_dict = {}
         print(simulation.iteration_count())
-        for key in timer_key_list:
-            res_dict[key] = simulation.timer.elapsed_time_us(key)
-        df_res = pd.concat(
-            [df_res, pd.DataFrame(res_dict, index=[0])], ignore_index=True
-        )
+        writer.close()
+        # for key in timer_key_list:
+        # res_dict[key] = simulation.timer.elapsed_time_us(key)
+        # df_res = pd.concat(
+        # [df_res, pd.DataFrame(res_dict, index=[0])], ignore_index=True
+        # )
     return df_res
 
 
@@ -209,7 +218,7 @@ if __name__ == "__main__":
     res = main(
         df_res=res,
         number_of_runs=5,
-        number_of_iterations=60000,
+        number_of_iterations=90000,
         number_of_agents=10000,
     )
     res.to_csv("evac_shortest_path_deque_ptr_15k_flt.csv", index=False)

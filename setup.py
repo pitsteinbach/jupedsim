@@ -260,6 +260,8 @@ setup(
         "jupedsim.internal",
         "jupedsim.native",
         "jupedsim_visualizer",
+        "jupedsim_examples",
+        "jupedsim_examples.models",
     ],
     package_dir={
         "jupedsim": "python_modules/jupedsim/jupedsim",
@@ -267,6 +269,8 @@ setup(
         "jupedsim.internal": "python_modules/jupedsim/jupedsim/internal",
         "jupedsim.native": "python_modules/jupedsim/jupedsim/native",
         "jupedsim_visualizer": "python_modules/jupedsim_visualizer/jupedsim_visualizer",
+        "jupedsim_examples": "python_modules/jupedsim_examples/jupedsim_examples",
+        "jupedsim_examples.models": "python_modules/jupedsim_examples/jupedsim_examples/models",
     },
     install_requires=[
         "numpy~=2.2",
