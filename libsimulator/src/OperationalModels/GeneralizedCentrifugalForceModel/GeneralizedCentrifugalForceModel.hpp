@@ -1,42 +1,38 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
+#include "AgentState.hpp"
 #include "CollisionGeometry.hpp"
 #include "LineSegment.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
 
-#include <fmt/core.h>
-
 class GeneralizedCentrifugalForceModel : public OperationalModel
 {
 public:
-    /// Per-agent state of the generalized centrifugal force model.
-    struct Agent {
-        Point position{};
-        Point orientation{1.0, 0.0};
-        double speed{};
-        Point e0{};
-        int orientationDelay{};
-        double mass{1.0};
-        double tau{0.5};
-        double v0{1.2};
-        double Av{1.0};
-        double AMin{0.2};
-        double BMin{0.2};
-        double BMax{0.4};
-        double strengthNeighborRepulsion{0.3};
-        double strengthGeometryRepulsion{0.2};
-        double maxNeighborInteractionDistance{2};
-        double maxGeometryInteractionDistance{2};
-        double maxNeighborInterpolationDistance{0.1};
-        double maxGeometryInterpolationDistance{0.1};
-        double maxNeighborRepulsionForce{9};
-        double maxGeometryRepulsionForce{3};
+    struct Defaults {
+        static constexpr double v0{1.2};
+        static constexpr double mass{1.0};
+        static constexpr double reactionTime{0.5}; // tau
+        static constexpr double strengthNeighborRepulsion{0.3};
+        static constexpr double strengthGeometryRepulsion{0.2};
+        // GCFM-specific extras defaults
+        static constexpr double Av{1.0};
+        static constexpr double AMin{0.2};
+        static constexpr double BMin{0.2};
+        static constexpr double BMax{0.4};
+        static constexpr double maxNeighborInteractionDistance{2};
+        static constexpr double maxGeometryInteractionDistance{2};
+        static constexpr double maxNeighborInterpolationDistance{0.1};
+        static constexpr double maxGeometryInterpolationDistance{0.1};
+        static constexpr double maxNeighborRepulsionForce{9};
+        static constexpr double maxGeometryRepulsionForce{3};
     };
 
+    static AgentState MakeState(Point pos = {});
+
 private:
-    double _cutOffRadius{4.0}; // TODO (MC) check this free parameter
+    double _cutOffRadius{4.0};
 
 public:
     GeneralizedCentrifugalForceModel() = default;
@@ -55,14 +51,6 @@ public:
         const CollisionGeometry& geometry) const override;
 
 private:
-    /**
-     * Driving force \f$ F_i =\frac{\mathbf{v_0}-\mathbf{v_i}}{\tau}\f$
-     *
-     * @param ped Pointer to Pedestrians
-     * @param room Pointer to Room
-     *
-     * @return Point
-     */
     Point ForceDriv(
         const GenericAgent& ped,
         Point target,
@@ -70,30 +58,12 @@ private:
         double tau,
         double deltaT,
         Point& e0update) const;
-    /**
-     * Repulsive force between two pedestrians ped1 and ped2 according to
-     * the Generalized Centrifugal Force Model (chraibi2010a)
-     *
-     * @param ped1 Pointer to Pedestrian: First pedestrian
-     * @param ped2 Pointer to Pedestrian: Second pedestrian
-     *
-     * @return Point
-     */
     Point ForceRepPed(const GenericAgent& ped1, const GenericAgent& ped2) const;
-    /**
-     * Repulsive force acting on pedestrian <ped> from the walls in
-     * <subroom>. The sum of all repulsive forces of the walls in <subroom> is calculated
-     * @see ForceRepWall
-     * @param ped Pointer to Pedestrian
-     * @param subroom Pointer to SubRoom
-     *
-     * @return
-     */
     Point ForceRepRoom(const GenericAgent& ped, const CollisionGeometry& geometry) const;
     Point ForceRepWall(const GenericAgent& ped, const LineSegment& l) const;
     Point ForceRepStatPoint(const GenericAgent& ped, const Point& p, double l, double vn) const;
     Point ForceInterpolation(
-        const Agent& model,
+        const AgentState& state,
         double v0,
         double K_ij,
         const Point& e,
@@ -102,16 +72,4 @@ private:
         double r,
         double l) const;
     double AgentToAgentSpacing(const GenericAgent& agent, const GenericAgent& otherAgent) const;
-};
-
-template <>
-struct fmt::formatter<GeneralizedCentrifugalForceModel::Agent> {
-
-    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-
-    template <typename FormatContext>
-    auto format(const GeneralizedCentrifugalForceModel::Agent& m, FormatContext& ctx) const
-    {
-        return fmt::format_to(ctx.out(), "GCFM[orientation={}, speed={}])", m.orientation, m.speed);
-    }
 };

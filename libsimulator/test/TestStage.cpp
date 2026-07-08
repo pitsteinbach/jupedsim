@@ -2,6 +2,7 @@
 #include "GenericAgent.hpp"
 #include "GeometryBuilder.hpp"
 #include "Journey.hpp"
+#include "OperationalModels/CollisionFreeSpeedModel/CollisionFreeSpeedModel.hpp"
 #include "Stage.hpp"
 #include "gtest/gtest.h"
 
@@ -34,7 +35,7 @@ TEST_F(StagesTests, NotifiableWaitingSetTargetIsCorrect)
             Journey::ID::Invalid,
             waitingSet.Id(),
             waitingPoints[i],
-            CollisionFreeSpeedModel::Agent{});
+            CollisionFreeSpeedModel::MakeState({}));
         neighborhoodSearch.AddAgent(agent);
 
         const auto& target = waitingSet.Target(agent);
@@ -50,7 +51,7 @@ TEST_F(StagesTests, NotifiableWaitingSetTargetIsCorrect)
             Journey::ID::Invalid,
             waitingSet.Id(),
             {},
-            CollisionFreeSpeedModel::Agent{});
+            CollisionFreeSpeedModel::MakeState({}));
         neighborhoodSearch.AddAgent(agentToLastWaitingSetPos);
         const auto& target = waitingSet.Target(agentToLastWaitingSetPos);
         ASSERT_EQ(target, waitingPoints.back());

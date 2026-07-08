@@ -13,26 +13,13 @@ from jupedsim.journey import JourneyDescription
 from jupedsim.models import ModelType
 from jupedsim.models.anticipation_velocity_model import (
     AnticipationVelocityModel,
-    AnticipationVelocityModelState,
-)
-from jupedsim.models.collision_free_speed import CollisionFreeSpeedModelState
-from jupedsim.models.collision_free_speed_v2 import (
-    CollisionFreeSpeedModelV2State,
-)
-from jupedsim.models.collision_free_speed_v3 import (
-    CollisionFreeSpeedModelV3State,
 )
 from jupedsim.models.custom_model import (
     CustomModelAgentState,
     CustomOperationalModel,
 )
-from jupedsim.models.generalized_centrifugal_force import (
-    GeneralizedCentrifugalForceModelState,
-)
-from jupedsim.models.social_force import SocialForceModelState
 from jupedsim.models.warp_driver import (
     WarpDriverModel,
-    WarpDriverModelState,
 )
 from jupedsim.serialization import TrajectoryWriter
 from jupedsim.stages import (
@@ -49,16 +36,6 @@ _MODEL_FACTORIES = {
     ModelType.GENERALIZED_CENTRIFUGAL_FORCE: py_jps.GeneralizedCentrifugalForceModel,
     ModelType.SOCIAL_FORCE: py_jps.SocialForceModel,
 }
-
-_STATE_TYPES = (
-    GeneralizedCentrifugalForceModelState,
-    CollisionFreeSpeedModelState,
-    CollisionFreeSpeedModelV2State,
-    CollisionFreeSpeedModelV3State,
-    AnticipationVelocityModelState,
-    SocialForceModelState,
-    WarpDriverModelState,
-)
 
 
 class Simulation:
@@ -271,16 +248,7 @@ class Simulation:
         self,
         journey_id: int,
         stage_id: int,
-        state: (
-            GeneralizedCentrifugalForceModelState
-            | CollisionFreeSpeedModelState
-            | CollisionFreeSpeedModelV2State
-            | CollisionFreeSpeedModelV3State
-            | AnticipationVelocityModelState
-            | SocialForceModelState
-            | WarpDriverModelState
-            | CustomModelAgentState
-        ),
+        state: Any,
     ) -> int:
         """Add an agent to the simulation.
 
@@ -302,17 +270,16 @@ class Simulation:
         Returns:
             Id of the added agent.
         """
-        if isinstance(state, _STATE_TYPES):
+        if isinstance(state, py_jps.AgentState):
             return self._obj.add_agent(journey_id, stage_id, state)
         if isinstance(state, CustomModelAgentState):
             return self._obj.add_agent(
                 journey_id, stage_id, py_jps._CustomModelData(state)
             )
         raise TypeError(
-            "state must be one of the built-in model states "
-            f"({', '.join(t.__name__ for t in _STATE_TYPES)}) or an object "
-            "satisfying CustomModelAgentState (exposing a 'position' "
-            f"attribute), got {type(state).__name__}"
+            "state must be an AgentState (returned by any built-in model state "
+            "factory) or an object satisfying CustomModelAgentState (exposing a "
+            f"'position' attribute), got {type(state).__name__}"
         )
 
     def mark_agent_for_removal(self, agent_id: int):

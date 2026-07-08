@@ -9,6 +9,7 @@ namespace py = pybind11;
 void init_logging(py::module_& m);
 void init_build_info(py::module_& m);
 void init_trace(py::module_& m);
+void init_agent_state(py::module_& m);
 void init_generalized_centrifugal_force_model(py::module_& m);
 void init_collision_free_speed_model(py::module_& m);
 void init_collision_free_speed_model_v2(py::module_& m);
@@ -35,6 +36,7 @@ PYBIND11_MODULE(py_jupedsim, m)
     init_journey(m);
     init_trace(m);
     init_python_model(m);
+    init_agent_state(m);
     init_generalized_centrifugal_force_model(m);
     init_collision_free_speed_model(m);
     init_collision_free_speed_model_v2(m);

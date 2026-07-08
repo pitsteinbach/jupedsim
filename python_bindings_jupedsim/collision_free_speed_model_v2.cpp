@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-#include "CollisionFreeSpeedModelV2.hpp"
+#include "AgentState.hpp"
+#include "OperationalModels/CollisionFreeSpeedModelV2/CollisionFreeSpeedModelV2.hpp"
 #include "OperationalModel.hpp"
 #include "type_casters.hpp" // IWYU pragma: keep
 
@@ -9,57 +10,44 @@
 
 namespace py = pybind11;
 
+using D = CollisionFreeSpeedModelV2::Defaults;
+
 void init_collision_free_speed_model_v2(py::module_& m)
 {
     py::class_<CollisionFreeSpeedModelV2, OperationalModel, py::smart_holder>(
         m, "CollisionFreeSpeedModelV2")
         .def(py::init<>());
-    const CollisionFreeSpeedModelV2::Agent d{};
-    py::class_<CollisionFreeSpeedModelV2::Agent>(m, "CollisionFreeSpeedModelV2State")
-        .def(
-            py::init([](Point position,
-                        Point orientation,
-                        double strengthNeighborRepulsion,
-                        double rangeNeighborRepulsion,
-                        double strengthGeometryRepulsion,
-                        double rangeGeometryRepulsion,
-                        double timeGap,
-                        double desiredSpeed,
-                        double radius) {
-                return CollisionFreeSpeedModelV2::Agent{
-                    .position = position,
-                    .orientation = orientation,
-                    .strengthNeighborRepulsion = strengthNeighborRepulsion,
-                    .rangeNeighborRepulsion = rangeNeighborRepulsion,
-                    .strengthGeometryRepulsion = strengthGeometryRepulsion,
-                    .rangeGeometryRepulsion = rangeGeometryRepulsion,
-                    .timeGap = timeGap,
-                    .v0 = desiredSpeed,
-                    .radius = radius};
-            }),
-            py::kw_only(),
-            py::arg("position") = d.position,
-            py::arg("orientation") = d.orientation,
-            py::arg("strength_neighbor_repulsion") = d.strengthNeighborRepulsion,
-            py::arg("range_neighbor_repulsion") = d.rangeNeighborRepulsion,
-            py::arg("strength_geometry_repulsion") = d.strengthGeometryRepulsion,
-            py::arg("range_geometry_repulsion") = d.rangeGeometryRepulsion,
-            py::arg("time_gap") = d.timeGap,
-            py::arg("desired_speed") = d.v0,
-            py::arg("radius") = d.radius)
-        .def_readwrite("position", &CollisionFreeSpeedModelV2::Agent::position)
-        .def_readwrite("orientation", &CollisionFreeSpeedModelV2::Agent::orientation)
-        .def_readwrite(
-            "strength_neighbor_repulsion",
-            &CollisionFreeSpeedModelV2::Agent::strengthNeighborRepulsion)
-        .def_readwrite(
-            "range_neighbor_repulsion", &CollisionFreeSpeedModelV2::Agent::rangeNeighborRepulsion)
-        .def_readwrite(
-            "strength_geometry_repulsion",
-            &CollisionFreeSpeedModelV2::Agent::strengthGeometryRepulsion)
-        .def_readwrite(
-            "range_geometry_repulsion", &CollisionFreeSpeedModelV2::Agent::rangeGeometryRepulsion)
-        .def_readwrite("time_gap", &CollisionFreeSpeedModelV2::Agent::timeGap)
-        .def_readwrite("desired_speed", &CollisionFreeSpeedModelV2::Agent::v0)
-        .def_readwrite("radius", &CollisionFreeSpeedModelV2::Agent::radius);
+
+    m.def(
+        "CollisionFreeSpeedModelV2State",
+        [](Point position,
+           Point orientation,
+           double strengthNeighborRepulsion,
+           double rangeNeighborRepulsion,
+           double strengthGeometryRepulsion,
+           double rangeGeometryRepulsion,
+           double timeGap,
+           double desiredSpeed,
+           double radius) -> AgentState {
+            AgentState state = CollisionFreeSpeedModelV2::MakeState(position);
+            state.orientation = orientation;
+            state.strengthNeighborRepulsion = strengthNeighborRepulsion;
+            state.rangeNeighborRepulsion = rangeNeighborRepulsion;
+            state.strengthGeometryRepulsion = strengthGeometryRepulsion;
+            state.rangeGeometryRepulsion = rangeGeometryRepulsion;
+            state.timeGap = timeGap;
+            state.v0 = desiredSpeed;
+            state.radius = radius;
+            return state;
+        },
+        py::kw_only(),
+        py::arg("position") = Point{},
+        py::arg("orientation") = Point{},
+        py::arg("strength_neighbor_repulsion") = D::strengthNeighborRepulsion,
+        py::arg("range_neighbor_repulsion") = D::rangeNeighborRepulsion,
+        py::arg("strength_geometry_repulsion") = D::strengthGeometryRepulsion,
+        py::arg("range_geometry_repulsion") = D::rangeGeometryRepulsion,
+        py::arg("time_gap") = D::timeGap,
+        py::arg("desired_speed") = D::v0,
+        py::arg("radius") = D::radius);
 }

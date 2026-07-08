@@ -3,8 +3,15 @@
 #include "GeometryBuilder.hpp"
 #include "NeighborhoodSearch.hpp"
 #include "OperationalDecisionSystem.hpp"
+#include "OperationalModels/AnticipationVelocityModel/AnticipationVelocityModel.hpp"
+#include "OperationalModels/CollisionFreeSpeedModel/CollisionFreeSpeedModel.hpp"
+#include "OperationalModels/CollisionFreeSpeedModelV2/CollisionFreeSpeedModelV2.hpp"
+#include "OperationalModels/CollisionFreeSpeedModelV3/CollisionFreeSpeedModelV3.hpp"
 #include "OperationalModels/CustomModel/CustomModel.hpp"
 #include "OperationalModels/CustomModel/CustomModelData.hpp"
+#include "OperationalModels/GeneralizedCentrifugalForceModel/GeneralizedCentrifugalForceModel.hpp"
+#include "OperationalModels/SocialForceModel/SocialForceModel.hpp"
+#include "OperationalModels/WarpDriver/WarpDriverModel.hpp"
 
 #include <fmt/format.h>
 #include <gtest/gtest.h>
@@ -136,25 +143,25 @@ TEST(CustomModel, RunsThroughOperationalDecisionSystem)
 TEST(ModelTypeOf, MapsEveryAgentModelDataToItsOperationalModelType)
 {
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{GeneralizedCentrifugalForceModel::Agent{}}),
+        ModelTypeOf(GenericAgent::Model{GeneralizedCentrifugalForceModel::MakeState({})}),
         OperationalModelType::GENERALIZED_CENTRIFUGAL_FORCE);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModel::Agent{}}),
+        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModel::MakeState({})}),
         OperationalModelType::COLLISION_FREE_SPEED);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModelV2::Agent{}}),
+        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModelV2::MakeState({})}),
         OperationalModelType::COLLISION_FREE_SPEED_V2);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModelV3::Agent{}}),
+        ModelTypeOf(GenericAgent::Model{CollisionFreeSpeedModelV3::MakeState({})}),
         OperationalModelType::COLLISION_FREE_SPEED_V3);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{AnticipationVelocityModel::Agent{}}),
+        ModelTypeOf(GenericAgent::Model{AnticipationVelocityModel::MakeState({})}),
         OperationalModelType::ANTICIPATION_VELOCITY_MODEL);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{SocialForceModel::Agent{}}),
+        ModelTypeOf(GenericAgent::Model{SocialForceModel::MakeState({})}),
         OperationalModelType::SOCIAL_FORCE);
     ASSERT_EQ(
-        ModelTypeOf(GenericAgent::Model{WarpDriverModel::Agent{}}),
+        ModelTypeOf(GenericAgent::Model{WarpDriverModel::MakeState({})}),
         OperationalModelType::WARP_DRIVER);
     ASSERT_EQ(
         ModelTypeOf(GenericAgent::Model{CustomModelData{MinimalState{}}}),

@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
+#include "AgentState.hpp"
 #include "CollisionGeometry.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
-
-#include <fmt/core.h>
 
 #include <cstdint>
 #include <random>
@@ -16,26 +15,21 @@
 class WarpDriverModel : public OperationalModel
 {
 public:
-    /// Per-agent state of the warp driver model.
-    struct Agent {
-        Point position{};
-        Point orientation{0.0, 0.0};
-        double radius{0.15};
-        double v0{1.2};
-        double stuckTime{0.0}; // elapsed time since anchor was set
-        double anchorX{0.0}; // position when stuck tracking began
-        double anchorY{0.0};
-        double detourTime{0.0}; // remaining time in detour mode
-        int detourSide{1}; // +1 = left, -1 = right of desired direction
-        double timeHorizon{2.0};
-        double stepSize{0.5};
-        double timeUncertainty{0.5};
-        double velocityUncertaintyX{0.2};
-        double velocityUncertaintyY{0.2};
-        int numSamples{20};
+    struct Defaults {
+        static constexpr double v0{1.2};
+        static constexpr double radius{0.15};
+        // Warp-specific extras defaults
+        static constexpr double timeHorizon{2.0};
+        static constexpr double stepSize{0.5};
+        static constexpr double timeUncertainty{0.5};
+        static constexpr double velocityUncertaintyX{0.2};
+        static constexpr double velocityUncertaintyY{0.2};
+        static constexpr int    numSamples{20};
     };
 
-    /// 3-component space-time point/vector used internally
+    static AgentState MakeState(Point pos = {});
+
+    /// 3-component space-time point/vector used internally for collision probability field.
     struct SpaceTimePoint {
         double x{};
         double y{};
@@ -43,11 +37,9 @@ public:
     };
 
 private:
-    /// Precomputed 2D collision probability field I(x,y) and its gradient.
-    /// Constant along time axis; time is a validity window [0,1] normalized.
     struct IntrinsicField {
         std::vector<double> values;
-        std::vector<Point> gradients; // (dI/dx, dI/dy)
+        std::vector<Point> gradients;
         double xMin{-3.0};
         double xMax{3.0};
         double yMin{-3.0};
@@ -58,19 +50,15 @@ private:
         int ny{61};
 
         void Compute(double sigma);
-        /// Bilinear interpolation. Returns (0, {0,0}) for out-of-bounds.
         std::pair<double, Point> Sample(double x, double y) const;
     };
 
-    // Genuinely simulation-global state
     double _cutOffRadius;
-
     IntrinsicField _intrinsicField;
     mutable std::mt19937 _rng;
 
 public:
     WarpDriverModel(double sigma, uint64_t rngSeed = 42);
-
     ~WarpDriverModel() override = default;
 
     OperationalModelType Type() const override;
@@ -86,21 +74,4 @@ public:
         const GenericAgent& agent,
         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
         const CollisionGeometry& geometry) const override;
-};
-
-template <>
-struct fmt::formatter<WarpDriverModel::Agent> {
-
-    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-
-    template <typename FormatContext>
-    auto format(const WarpDriverModel::Agent& m, FormatContext& ctx) const
-    {
-        return fmt::format_to(
-            ctx.out(),
-            "WarpDriver[orientation={}, radius={}, v0={}]",
-            m.orientation,
-            m.radius,
-            m.v0);
-    }
 };

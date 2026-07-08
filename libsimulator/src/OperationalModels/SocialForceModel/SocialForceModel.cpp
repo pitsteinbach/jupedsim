@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "SocialForceModel.hpp"
 
+#include "AgentState.hpp"
 #include "CollisionGeometry.hpp"
 #include "GenericAgent.hpp"
 #include "LineSegment.hpp"
@@ -15,6 +16,26 @@
 #include <numeric>
 #include <string>
 
+AgentState SocialForceModel::MakeState(Point pos)
+{
+    return AgentState{
+        .type = OperationalModelType::SOCIAL_FORCE,
+        .position = pos,
+        .v0 = Defaults::v0,
+        .radius = Defaults::radius,
+        .velocity = Point{0.0, 0.0},
+        .mass = Defaults::mass,
+        .reactionTime = Defaults::reactionTime,
+        .extras = SFMExtras{
+            .agentScale = Defaults::agentScale,
+            .obstacleScale = Defaults::obstacleScale,
+            .forceDistance = Defaults::forceDistance,
+            .bodyForce = Defaults::bodyForce,
+            .friction = Defaults::friction,
+        },
+    };
+}
+
 OperationalModelType SocialForceModel::Type() const
 {
     return OperationalModelType::SOCIAL_FORCE;
@@ -27,7 +48,8 @@ void SocialForceModel::ComputeNext(
     const CollisionGeometry& geometry,
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
-    const auto& model = std::get<Agent>(current.model);
+    const auto& state = std::get<AgentState>(current.model);
+    const auto mass = state.mass.value_or(Defaults::mass);
     auto forces = DrivingForce(current);
 
     const auto neighborhood =
@@ -39,7 +61,7 @@ void SocialForceModel::ComputeNext(
         }
         F_rep += AgentForce(current, neighbor);
     }
-    forces += F_rep / model.mass;
+    forces += F_rep / mass;
     const auto& walls = geometry.LineSegmentsInApproxDistanceTo(Pos(current));
 
     const auto obstacle_f = std::accumulate(
@@ -49,12 +71,13 @@ void SocialForceModel::ComputeNext(
         [this, &current](const auto& acc, const auto& element) {
             return acc + ObstacleForce(current, element);
         });
-    forces += obstacle_f / model.mass;
+    forces += obstacle_f / mass;
 
-    const auto velocity = model.velocity + forces * dT;
-    auto& nextModel = std::get<Agent>(next.model);
-    nextModel.position = Pos(current) + velocity * dT;
-    nextModel.velocity = velocity;
+    const auto currentVelocity = state.velocity.value_or(Point{0.0, 0.0});
+    const auto velocity = currentVelocity + forces * dT;
+    auto& nextState = std::get<AgentState>(next.model);
+    nextState.position = Pos(current) + velocity * dT;
+    nextState.velocity = velocity;
 }
 
 void SocialForceModel::CheckModelConstraint(
@@ -62,8 +85,6 @@ void SocialForceModel::CheckModelConstraint(
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
     const CollisionGeometry& geometry) const
 {
-    // none of these constraint are given by the paper but are useful to create a simulation that
-    // does not break immediately
     auto throwIfNegative = [](double value, std::string name) {
         if(value < 0) {
             throw SimulationError(
@@ -75,87 +96,88 @@ void SocialForceModel::CheckModelConstraint(
         }
     };
 
-    const auto& model = std::get<Agent>(agent.model);
-
-    const auto mass = model.mass;
-    throwIfNegative(mass, "mass");
-
-    const auto desiredSpeed = model.desiredSpeed;
-    throwIfNegative(desiredSpeed, "desired speed");
-
-    const auto reactionTime = model.reactionTime;
-    throwIfNegative(reactionTime, "reaction time");
-
-    const auto radius = model.radius;
+    const auto& state = std::get<AgentState>(agent.model);
+    throwIfNegative(state.mass.value_or(Defaults::mass), "mass");
+    throwIfNegative(state.v0.value_or(Defaults::v0), "desired speed");
+    throwIfNegative(state.reactionTime.value_or(Defaults::reactionTime), "reaction time");
+    const auto radius = state.radius.value_or(Defaults::radius);
     throwIfNegative(radius, "radius");
 
     const auto neighbors = neighborhoodSearch.GetNeighboringAgents(Pos(agent), 2);
     for(const auto& neighbor : neighbors) {
         const auto distance = (Pos(agent) - Pos(neighbor)).Norm();
-
-        if(model.radius >= distance) {
+        if(radius >= distance) {
             throw SimulationError(
                 "Model constraint violation: Agent {} too close to agent {}: distance {}, "
                 "radius {}",
                 Pos(agent),
                 Pos(neighbor),
                 distance,
-                model.radius);
+                radius);
         }
     }
-    const auto maxRadius = model.radius / 2;
+    const auto maxRadius = radius / 2;
     const auto lineSegments = geometry.LineSegmentsInDistanceTo(maxRadius, Pos(agent));
     if(std::begin(lineSegments) != std::end(lineSegments)) {
         throw SimulationError(
             "Model constraint violation: Agent {} too close to geometry boundaries, distance <= "
             "{}/2",
             Pos(agent),
-            model.radius);
+            radius);
     }
 }
 
 Point SocialForceModel::DrivingForce(const GenericAgent& agent)
 {
-    const auto& model = std::get<Agent>(agent.model);
+    const auto& state = std::get<AgentState>(agent.model);
     const Point e0 = (agent.destination - Pos(agent)).Normalized();
-    return (e0 * model.desiredSpeed - model.velocity) / model.reactionTime;
-};
+    const auto v0 = state.v0.value_or(Defaults::v0);
+    const auto reactionTime = state.reactionTime.value_or(Defaults::reactionTime);
+    const auto velocity = state.velocity.value_or(Point{0.0, 0.0});
+    return (e0 * v0 - velocity) / reactionTime;
+}
+
 double SocialForceModel::PushingForceLength(double A, double B, double r, double distance)
 {
-    return A * exp((r - distance) / B);
+    return A * std::exp((r - distance) / B);
 }
 
 Point SocialForceModel::AgentForce(const GenericAgent& ped1, const GenericAgent& ped2) const
 {
-    const auto& model1 = std::get<Agent>(ped1.model);
-    const auto& model2 = std::get<Agent>(ped2.model);
+    const auto& s1 = std::get<AgentState>(ped1.model);
+    const auto& s2 = std::get<AgentState>(ped2.model);
+    const auto& e1 = std::get<SFMExtras>(s1.extras);
 
-    const double total_radius = model1.radius + model2.radius;
+    const double total_radius =
+        s1.radius.value_or(Defaults::radius) + s2.radius.value_or(Defaults::radius);
+    const auto v1 = s1.velocity.value_or(Point{0.0, 0.0});
+    const auto v2 = s2.velocity.value_or(Point{0.0, 0.0});
 
     return ForceBetweenPoints(
         Pos(ped1),
         Pos(ped2),
-        model1.agentScale,
-        model1.forceDistance,
+        e1.agentScale,
+        e1.forceDistance,
         total_radius,
-        model2.velocity - model1.velocity,
-        model1.bodyForce,
-        model1.friction);
-};
+        v2 - v1,
+        e1.bodyForce,
+        e1.friction);
+}
 
 Point SocialForceModel::ObstacleForce(const GenericAgent& agent, const LineSegment& segment) const
 {
-    const auto& model = std::get<Agent>(agent.model);
+    const auto& state = std::get<AgentState>(agent.model);
+    const auto& extras = std::get<SFMExtras>(state.extras);
     const Point pt = segment.ShortestPoint(Pos(agent));
     return ForceBetweenPoints(
         Pos(agent),
         pt,
-        model.obstacleScale,
-        model.forceDistance,
-        model.radius,
-        model.velocity,
-        model.bodyForce,
-        model.friction);
+        extras.obstacleScale,
+        extras.forceDistance,
+        state.radius.value_or(Defaults::radius),
+        state.velocity.value_or(Point{0.0, 0.0}),
+        extras.bodyForce,
+        extras.friction);
 }
 
 Point SocialForceModel::ForceBetweenPoints(
@@ -168,7 +190,6 @@ Point SocialForceModel::ForceBetweenPoints(
     const double bodyForce,
     const double friction)
 {
-    // todo reduce range of force to 180 degrees
     const double dist = (pt1 - pt2).Norm();
     double pushing_force_length = PushingForceLength(A, B, radius, dist);
     double friction_force_length = 0;

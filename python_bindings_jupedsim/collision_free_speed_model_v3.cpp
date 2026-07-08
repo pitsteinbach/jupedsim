@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-#include "CollisionFreeSpeedModelV3.hpp"
+#include "AgentState.hpp"
+#include "OperationalModels/CollisionFreeSpeedModelV3/CollisionFreeSpeedModelV3.hpp"
 #include "OperationalModel.hpp"
 #include "type_casters.hpp" // IWYU pragma: keep
 
@@ -9,78 +10,60 @@
 
 namespace py = pybind11;
 
+using D = CollisionFreeSpeedModelV3::Defaults;
+
 void init_collision_free_speed_model_v3(py::module_& m)
 {
     py::class_<CollisionFreeSpeedModelV3, OperationalModel, py::smart_holder>(
         m, "CollisionFreeSpeedModelV3")
         .def(py::init<>());
-    const CollisionFreeSpeedModelV3::Agent d{};
-    py::class_<CollisionFreeSpeedModelV3::Agent>(m, "CollisionFreeSpeedModelV3State")
-        .def(
-            py::init([](Point position,
-                        Point orientation,
-                        double strengthNeighborRepulsion,
-                        double rangeNeighborRepulsion,
-                        double strengthGeometryRepulsion,
-                        double rangeGeometryRepulsion,
-                        double rangeXScale,
-                        double rangeYScale,
-                        double thetaMaxUpperBound,
-                        double agentBuffer,
-                        double timeGap,
-                        double desiredSpeed,
-                        double radius,
-                        double headingAngle) {
-                return CollisionFreeSpeedModelV3::Agent{
-                    .position = position,
-                    .orientation = orientation,
-                    .strengthNeighborRepulsion = strengthNeighborRepulsion,
-                    .rangeNeighborRepulsion = rangeNeighborRepulsion,
-                    .strengthGeometryRepulsion = strengthGeometryRepulsion,
-                    .rangeGeometryRepulsion = rangeGeometryRepulsion,
-                    .rangeXScale = rangeXScale,
-                    .rangeYScale = rangeYScale,
-                    .thetaMaxUpperBound = thetaMaxUpperBound,
-                    .agentBuffer = agentBuffer,
-                    .timeGap = timeGap,
-                    .v0 = desiredSpeed,
-                    .radius = radius,
-                    .headingAngle = headingAngle};
-            }),
-            py::kw_only(),
-            py::arg("position") = d.position,
-            py::arg("orientation") = d.orientation,
-            py::arg("strength_neighbor_repulsion") = d.strengthNeighborRepulsion,
-            py::arg("range_neighbor_repulsion") = d.rangeNeighborRepulsion,
-            py::arg("strength_geometry_repulsion") = d.strengthGeometryRepulsion,
-            py::arg("range_geometry_repulsion") = d.rangeGeometryRepulsion,
-            py::arg("range_x_scale") = d.rangeXScale,
-            py::arg("range_y_scale") = d.rangeYScale,
-            py::arg("theta_max_upper_bound") = d.thetaMaxUpperBound,
-            py::arg("agent_buffer") = d.agentBuffer,
-            py::arg("time_gap") = d.timeGap,
-            py::arg("desired_speed") = d.v0,
-            py::arg("radius") = d.radius,
-            py::arg("heading_angle") = d.headingAngle)
-        .def_readwrite("position", &CollisionFreeSpeedModelV3::Agent::position)
-        .def_readwrite("orientation", &CollisionFreeSpeedModelV3::Agent::orientation)
-        .def_readwrite(
-            "strength_neighbor_repulsion",
-            &CollisionFreeSpeedModelV3::Agent::strengthNeighborRepulsion)
-        .def_readwrite(
-            "range_neighbor_repulsion", &CollisionFreeSpeedModelV3::Agent::rangeNeighborRepulsion)
-        .def_readwrite(
-            "strength_geometry_repulsion",
-            &CollisionFreeSpeedModelV3::Agent::strengthGeometryRepulsion)
-        .def_readwrite(
-            "range_geometry_repulsion", &CollisionFreeSpeedModelV3::Agent::rangeGeometryRepulsion)
-        .def_readwrite("range_x_scale", &CollisionFreeSpeedModelV3::Agent::rangeXScale)
-        .def_readwrite("range_y_scale", &CollisionFreeSpeedModelV3::Agent::rangeYScale)
-        .def_readwrite(
-            "theta_max_upper_bound", &CollisionFreeSpeedModelV3::Agent::thetaMaxUpperBound)
-        .def_readwrite("agent_buffer", &CollisionFreeSpeedModelV3::Agent::agentBuffer)
-        .def_readwrite("time_gap", &CollisionFreeSpeedModelV3::Agent::timeGap)
-        .def_readwrite("desired_speed", &CollisionFreeSpeedModelV3::Agent::v0)
-        .def_readwrite("radius", &CollisionFreeSpeedModelV3::Agent::radius)
-        .def_readwrite("heading_angle", &CollisionFreeSpeedModelV3::Agent::headingAngle);
+
+    m.def(
+        "CollisionFreeSpeedModelV3State",
+        [](Point position,
+           Point orientation,
+           double strengthNeighborRepulsion,
+           double rangeNeighborRepulsion,
+           double strengthGeometryRepulsion,
+           double rangeGeometryRepulsion,
+           double rangeXScale,
+           double rangeYScale,
+           double thetaMaxUpperBound,
+           double agentBuffer,
+           double timeGap,
+           double desiredSpeed,
+           double radius,
+           double headingAngle) -> AgentState {
+            AgentState state = CollisionFreeSpeedModelV3::MakeState(position);
+            state.orientation = orientation;
+            state.strengthNeighborRepulsion = strengthNeighborRepulsion;
+            state.rangeNeighborRepulsion = rangeNeighborRepulsion;
+            state.strengthGeometryRepulsion = strengthGeometryRepulsion;
+            state.rangeGeometryRepulsion = rangeGeometryRepulsion;
+            state.timeGap = timeGap;
+            state.v0 = desiredSpeed;
+            state.radius = radius;
+            auto& extras = std::get<CFSv3Extras>(state.extras);
+            extras.rangeXScale = rangeXScale;
+            extras.rangeYScale = rangeYScale;
+            extras.thetaMaxUpperBound = thetaMaxUpperBound;
+            extras.agentBuffer = agentBuffer;
+            extras.headingAngle = headingAngle;
+            return state;
+        },
+        py::kw_only(),
+        py::arg("position") = Point{},
+        py::arg("orientation") = Point{1.0, 0.0},
+        py::arg("strength_neighbor_repulsion") = D::strengthNeighborRepulsion,
+        py::arg("range_neighbor_repulsion") = D::rangeNeighborRepulsion,
+        py::arg("strength_geometry_repulsion") = D::strengthGeometryRepulsion,
+        py::arg("range_geometry_repulsion") = D::rangeGeometryRepulsion,
+        py::arg("range_x_scale") = D::rangeXScale,
+        py::arg("range_y_scale") = D::rangeYScale,
+        py::arg("theta_max_upper_bound") = D::thetaMaxUpperBound,
+        py::arg("agent_buffer") = D::agentBuffer,
+        py::arg("time_gap") = D::timeGap,
+        py::arg("desired_speed") = D::v0,
+        py::arg("radius") = D::radius,
+        py::arg("heading_angle") = D::headingAngle);
 }

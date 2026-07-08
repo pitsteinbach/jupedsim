@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "Simulation.hpp"
 
+#include "AgentState.hpp"
 #include "CollisionGeometry.hpp"
 #include "GenericAgent.hpp"
 #include "Journey.hpp"
 #include "OperationalModel.hpp"
+#include "OperationalModels/CustomModel/CustomModelData.hpp"
 #include "OperationalModels/OperationalModelType.hpp"
 #include "Polygon.hpp"
 #include "Stage.hpp"
@@ -108,43 +110,7 @@ void init_simulation(py::module_& m)
             })
         .def(
             "add_agent",
-            &AddAgentWithState<GeneralizedCentrifugalForceModel::Agent>,
-            py::arg("journey_id"),
-            py::arg("stage_id"),
-            py::arg("state"))
-        .def(
-            "add_agent",
-            &AddAgentWithState<CollisionFreeSpeedModel::Agent>,
-            py::arg("journey_id"),
-            py::arg("stage_id"),
-            py::arg("state"))
-        .def(
-            "add_agent",
-            &AddAgentWithState<CollisionFreeSpeedModelV2::Agent>,
-            py::arg("journey_id"),
-            py::arg("stage_id"),
-            py::arg("state"))
-        .def(
-            "add_agent",
-            &AddAgentWithState<CollisionFreeSpeedModelV3::Agent>,
-            py::arg("journey_id"),
-            py::arg("stage_id"),
-            py::arg("state"))
-        .def(
-            "add_agent",
-            &AddAgentWithState<AnticipationVelocityModel::Agent>,
-            py::arg("journey_id"),
-            py::arg("stage_id"),
-            py::arg("state"))
-        .def(
-            "add_agent",
-            &AddAgentWithState<SocialForceModel::Agent>,
-            py::arg("journey_id"),
-            py::arg("stage_id"),
-            py::arg("state"))
-        .def(
-            "add_agent",
-            &AddAgentWithState<WarpDriverModel::Agent>,
+            &AddAgentWithState<AgentState>,
             py::arg("journey_id"),
             py::arg("stage_id"),
             py::arg("state"))

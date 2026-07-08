@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "CollisionFreeSpeedModelV3.hpp"
 
+#include "AgentState.hpp"
 #include "CollisionGeometry.hpp"
 #include "GenericAgent.hpp"
 #include "GeometricFunctions.hpp"
@@ -19,24 +20,23 @@
 
 namespace
 {
-constexpr double Eps = 1e-6; // Numeric lower bound to avoid division by zero in range terms.
-constexpr double SideEps = 0.05; // Smooths left/right sign near centerline to reduce heading flips.
-constexpr double SpacingBlendWeight =
-    0.15; // Blends move-direction spacing with goal-direction spacing.
-constexpr double TauTheta = 0.3; // Heading relaxation timescale [s] for temporal smoothing.
-constexpr double MinReverseSpeed =
-    -0.01; // Deterministic tiny reverse floor [m/s] to release local blockages.
+constexpr double Eps = 1e-6;
+constexpr double SideEps = 0.05;
+constexpr double SpacingBlendWeight = 0.15;
+constexpr double TauTheta = 0.3;
+constexpr double MinReverseSpeed = -0.01;
 
 double NeighborInfluence(
     const std::vector<GenericAgent>& neighborhood,
     const Point& pos,
     const Point& reference_direction,
-    const CollisionFreeSpeedModelV3::Agent& model)
+    const CFSv3Extras& extras,
+    double strengthNeighborRepulsion,
+    double rangeNeighborRepulsion)
 {
-    const auto range_x = std::max(Eps, model.rangeNeighborRepulsion * model.rangeXScale);
-    const auto range_y = std::max(Eps, model.rangeNeighborRepulsion * model.rangeYScale);
-    const auto theta_max =
-        std::clamp(model.strengthNeighborRepulsion, 0.0, model.thetaMaxUpperBound);
+    const auto range_x = std::max(Eps, rangeNeighborRepulsion * extras.rangeXScale);
+    const auto range_y = std::max(Eps, rangeNeighborRepulsion * extras.rangeYScale);
+    const auto theta_max = std::clamp(strengthNeighborRepulsion, 0.0, extras.thetaMaxUpperBound);
 
     double best_influence = 0.0;
     double best_weight = 0.0;
@@ -46,7 +46,6 @@ double NeighborInfluence(
         if(x <= 0.0) {
             continue;
         }
-
         const auto signed_lateral = reference_direction.CrossProduct(relative);
         const auto y = std::abs(signed_lateral);
         const auto longitudinal_weight = std::exp(-x / range_x);
@@ -57,10 +56,32 @@ double NeighborInfluence(
             best_influence = -weight * (signed_lateral / (std::abs(signed_lateral) + SideEps));
         }
     }
-
     return theta_max * std::tanh(best_influence);
 }
 } // namespace
+
+AgentState CollisionFreeSpeedModelV3::MakeState(Point pos)
+{
+    return AgentState{
+        .type = OperationalModelType::COLLISION_FREE_SPEED_V3,
+        .position = pos,
+        .orientation = Point{1.0, 0.0},
+        .v0 = Defaults::v0,
+        .radius = Defaults::radius,
+        .timeGap = Defaults::timeGap,
+        .strengthNeighborRepulsion = Defaults::strengthNeighborRepulsion,
+        .rangeNeighborRepulsion = Defaults::rangeNeighborRepulsion,
+        .strengthGeometryRepulsion = Defaults::strengthGeometryRepulsion,
+        .rangeGeometryRepulsion = Defaults::rangeGeometryRepulsion,
+        .extras = CFSv3Extras{
+            .rangeXScale = Defaults::rangeXScale,
+            .rangeYScale = Defaults::rangeYScale,
+            .thetaMaxUpperBound = Defaults::thetaMaxUpperBound,
+            .agentBuffer = Defaults::agentBuffer,
+            .headingAngle = Defaults::headingAngle,
+        },
+    };
+}
 
 OperationalModelType CollisionFreeSpeedModelV3::Type() const
 {
@@ -96,17 +117,21 @@ void CollisionFreeSpeedModelV3::ComputeNext(
             return acc + BoundaryRepulsion(current, element);
         });
 
-    const auto& model = std::get<Agent>(current.model);
+    const auto& state = std::get<AgentState>(current.model);
+    const auto& extras = std::get<CFSv3Extras>(state.extras);
+    const auto strengthN = state.strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion);
+    const auto rangeN = state.rangeNeighborRepulsion.value_or(Defaults::rangeNeighborRepulsion);
+
     const auto desired_direction = (current.destination - Pos(current)).Normalized();
     auto reference_direction = (desired_direction + boundaryRepulsion).Normalized();
     if(reference_direction == Point{}) {
-        reference_direction = model.orientation;
+        reference_direction = state.orientation.value_or(Point{1.0, 0.0});
     }
 
     const auto heading_target =
-        NeighborInfluence(neighborhood, Pos(current), reference_direction, model);
+        NeighborInfluence(neighborhood, Pos(current), reference_direction, extras, strengthN, rangeN);
     const auto alpha = std::clamp(dT / TauTheta, 0.0, 1.0);
-    const auto heading_angle = model.headingAngle + alpha * (heading_target - model.headingAngle);
+    const auto heading_angle = extras.headingAngle + alpha * (heading_target - extras.headingAngle);
     auto direction =
         reference_direction.Rotate(std::cos(heading_angle), std::sin(heading_angle)).Normalized();
     if(direction == Point{}) {
@@ -134,12 +159,14 @@ void CollisionFreeSpeedModelV3::ComputeNext(
     const auto spacing =
         spacing_move * (1.0 - SpacingBlendWeight) + spacing_goal * SpacingBlendWeight;
 
-    const auto optimal_speed = OptimalSpeed(current, spacing, model.timeGap);
+    const auto optimal_speed =
+        OptimalSpeed(current, spacing, state.timeGap.value_or(Defaults::timeGap));
     const auto velocity = direction * optimal_speed;
-    auto& nextModel = std::get<Agent>(next.model);
-    nextModel.position = Pos(current) + velocity * dT;
-    nextModel.orientation = direction;
-    nextModel.headingAngle = heading_angle;
+    auto& nextState = std::get<AgentState>(next.model);
+    nextState.position = Pos(current) + velocity * dT;
+    nextState.orientation = direction;
+    auto& nextExtras = std::get<CFSv3Extras>(nextState.extras);
+    nextExtras.headingAngle = heading_angle;
 }
 
 void CollisionFreeSpeedModelV3::CheckModelConstraint(
@@ -147,45 +174,48 @@ void CollisionFreeSpeedModelV3::CheckModelConstraint(
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
     const CollisionGeometry& geometry) const
 {
-    const auto& model = std::get<Agent>(agent.model);
+    const auto& state = std::get<AgentState>(agent.model);
+    const auto& extras = std::get<CFSv3Extras>(state.extras);
 
-    validateConstraint(model.radius, 0.0, 2.0, "radius", true);
-    validateConstraint(model.v0, 0.0, 10.0, "v0");
-    validateConstraint(model.timeGap, 0.1, 10.0, "timeGap");
-
+    validateConstraint(state.radius.value_or(Defaults::radius), 0.0, 2.0, "radius", true);
+    validateConstraint(state.v0.value_or(Defaults::v0), 0.0, 10.0, "v0");
+    validateConstraint(state.timeGap.value_or(Defaults::timeGap), 0.1, 10.0, "timeGap");
     validateConstraint(
-        model.strengthNeighborRepulsion,
+        state.strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion),
         0.0,
         std::numeric_limits<double>::max(),
         "strengthNeighborRepulsion");
     validateConstraint(
-        model.rangeNeighborRepulsion,
+        state.rangeNeighborRepulsion.value_or(Defaults::rangeNeighborRepulsion),
         0.01,
         std::numeric_limits<double>::max(),
         "rangeNeighborRepulsion");
     validateConstraint(
-        model.strengthGeometryRepulsion,
+        state.strengthGeometryRepulsion.value_or(Defaults::strengthGeometryRepulsion),
         0.0,
         std::numeric_limits<double>::max(),
         "strengthGeometryRepulsion");
     validateConstraint(
-        model.rangeGeometryRepulsion,
+        state.rangeGeometryRepulsion.value_or(Defaults::rangeGeometryRepulsion),
         0.01,
         std::numeric_limits<double>::max(),
         "rangeGeometryRepulsion");
+    validateConstraint(extras.rangeXScale, 0.01, std::numeric_limits<double>::max(), "rangeXScale");
+    validateConstraint(extras.rangeYScale, 0.01, std::numeric_limits<double>::max(), "rangeYScale");
+    validateConstraint(extras.thetaMaxUpperBound, 0.0, std::acos(-1.0), "thetaMaxUpperBound");
+    validateConstraint(extras.agentBuffer, 0.0, 100.0, "agentBuffer");
 
-    validateConstraint(model.rangeXScale, 0.01, std::numeric_limits<double>::max(), "rangeXScale");
-    validateConstraint(model.rangeYScale, 0.01, std::numeric_limits<double>::max(), "rangeYScale");
-    validateConstraint(model.thetaMaxUpperBound, 0.0, std::acos(-1.0), "thetaMaxUpperBound");
-    validateConstraint(model.agentBuffer, 0.0, 100.0, "agentBuffer");
-
+    const auto r = state.radius.value_or(Defaults::radius);
     const auto neighbors = neighborhoodSearch.GetNeighboringAgents(Pos(agent), 2);
     for(const auto& neighbor : neighbors) {
         if(agent.id == neighbor.id) {
             continue;
         }
-        const auto& neighbor_model = std::get<Agent>(neighbor.model);
-        const auto contactDist = model.radius + neighbor_model.radius;
+        const auto* nbState = std::get_if<AgentState>(&neighbor.model);
+        if(!nbState) {
+            continue;
+        }
+        const auto contactDist = r + nbState->radius.value_or(Defaults::radius);
         const auto distance = (Pos(agent) - Pos(neighbor)).Norm();
         if(contactDist >= distance) {
             throw SimulationError(
@@ -196,13 +226,13 @@ void CollisionFreeSpeedModelV3::CheckModelConstraint(
         }
     }
 
-    const auto lineSegments = geometry.LineSegmentsInDistanceTo(model.radius, Pos(agent));
+    const auto lineSegments = geometry.LineSegmentsInDistanceTo(r, Pos(agent));
     if(std::begin(lineSegments) != std::end(lineSegments)) {
         throw SimulationError(
             "Model constraint violation: Agent {} too close to geometry boundaries, distance "
             "<= {}",
             Pos(agent),
-            model.radius);
+            r);
     }
 }
 
@@ -211,9 +241,12 @@ double CollisionFreeSpeedModelV3::OptimalSpeed(
     double spacing,
     double time_gap) const
 {
-    const auto& model = std::get<Agent>(ped.model);
-    const auto effective_spacing = spacing - model.agentBuffer;
-    return std::min(std::max(effective_spacing / time_gap, MinReverseSpeed), model.v0);
+    const auto& state = std::get<AgentState>(ped.model);
+    const auto& extras = std::get<CFSv3Extras>(state.extras);
+    const auto effective_spacing = spacing - extras.agentBuffer;
+    return std::min(
+        std::max(effective_spacing / time_gap, MinReverseSpeed),
+        state.v0.value_or(Defaults::v0));
 }
 
 double CollisionFreeSpeedModelV3::GetSpacing(
@@ -221,20 +254,20 @@ double CollisionFreeSpeedModelV3::GetSpacing(
     const GenericAgent& ped2,
     const Point& direction) const
 {
-    const auto& model1 = std::get<Agent>(ped1.model);
-    const auto& model2 = std::get<Agent>(ped2.model);
+    const auto* s1 = std::get_if<AgentState>(&ped1.model);
+    const auto* s2 = std::get_if<AgentState>(&ped2.model);
+    if(!s1 || !s2) {
+        return std::numeric_limits<double>::max();
+    }
     const auto distp12 = Pos(ped2) - Pos(ped1);
     if(direction.ScalarProduct(distp12) < 0.0) {
         return std::numeric_limits<double>::max();
     }
-
     const auto left = direction.Rotate90Deg();
-    const auto l = model1.radius + model2.radius;
-    const auto inCorridor = std::abs(left.ScalarProduct(distp12)) <= l;
-    if(!inCorridor) {
+    const auto l = s1->radius.value_or(Defaults::radius) + s2->radius.value_or(Defaults::radius);
+    if(std::abs(left.ScalarProduct(distp12)) > l) {
         return std::numeric_limits<double>::max();
     }
-
     return distp12.Norm() - l;
 }
 
@@ -245,9 +278,9 @@ Point CollisionFreeSpeedModelV3::BoundaryRepulsion(
     const auto pt = boundary_segment.ShortestPoint(Pos(ped));
     const auto dist_vec = pt - Pos(ped);
     const auto [dist, e_iw] = dist_vec.NormAndNormalized();
-    const auto& model = std::get<Agent>(ped.model);
-    const auto l = model.radius;
-    const auto R_iw =
-        -model.strengthGeometryRepulsion * std::exp((l - dist) / model.rangeGeometryRepulsion);
-    return e_iw * R_iw;
+    const auto& state = std::get<AgentState>(ped.model);
+    const auto l = state.radius.value_or(Defaults::radius);
+    const auto strengthG = state.strengthGeometryRepulsion.value_or(Defaults::strengthGeometryRepulsion);
+    const auto rangeG = state.rangeGeometryRepulsion.value_or(Defaults::rangeGeometryRepulsion);
+    return e_iw * (-strengthG * std::exp((l - dist) / rangeG));
 }

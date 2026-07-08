@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
+#include "AgentState.hpp"
 #include "CollisionGeometry.hpp"
 #include "LineSegment.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
-
-#include <fmt/core.h>
 
 #include <cstdint>
 #include <random>
@@ -16,26 +15,23 @@
 class AnticipationVelocityModel : public OperationalModel
 {
 public:
-    /// Per-agent state of the anticipation velocity model.
-    struct Agent {
-        Point position{};
-        Point orientation{0.0, 0.0};
-        double strengthNeighborRepulsion{8.0};
-        double rangeNeighborRepulsion{0.1};
-        double wallBufferDistance{0.1}; // buff distance of agent to wall
-        double anticipationTime{1.0}; // anticipation time
-        double reactionTime{0.3}; // reaction time to update direction
-        Point velocity{};
-        double timeGap{1.06};
-        double v0{1.2};
-        double radius{0.2};
-        /// Add a small outward component to maintain minimum distance from walls.
-        double pushoutStrength{0.3};
+    struct Defaults {
+        static constexpr double v0{1.2};
+        static constexpr double radius{0.2};
+        static constexpr double timeGap{1.06};
+        static constexpr double strengthNeighborRepulsion{8.0};
+        static constexpr double rangeNeighborRepulsion{0.1};
+        static constexpr double reactionTime{0.3};
+        // AVM-specific
+        static constexpr double wallBufferDistance{0.1};
+        static constexpr double anticipationTime{1.0};
+        static constexpr double pushoutStrength{0.3};
     };
+
+    static AgentState MakeState(Point pos = {});
 
 private:
     double _cutOffRadius{3};
-    // Shared sequential RNG: draws must stay on the model to keep simulations deterministic.
     mutable std::mt19937 gen;
 
 public:
@@ -72,30 +68,4 @@ private:
 
     Point
     UpdateDirection(const GenericAgent& ped, const Point& calculatedDirection, double dt) const;
-};
-
-template <>
-struct fmt::formatter<AnticipationVelocityModel::Agent> {
-
-    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-
-    template <typename FormatContext>
-    auto format(const AnticipationVelocityModel::Agent& m, FormatContext& ctx) const
-    {
-        return fmt::format_to(
-            ctx.out(),
-            "AnticipationVelocityModel[orientation={}, strengthNeighborRepulsion={}, "
-            "rangeNeighborRepulsion={}, wallBufferDistance={}, "
-            "timeGap={}, v0={}, radius={}, reactionTime={}, anticipationTime={}, velocity={}])",
-            m.orientation,
-            m.strengthNeighborRepulsion,
-            m.rangeNeighborRepulsion,
-            m.wallBufferDistance,
-            m.timeGap,
-            m.v0,
-            m.radius,
-            m.reactionTime,
-            m.anticipationTime,
-            m.velocity);
-    }
 };
