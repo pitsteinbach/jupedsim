@@ -82,28 +82,22 @@ struct AgentState {
     Point position{};
 
     // ---- common optional fields — nullopt means "use model default" ----
-    std::optional<Point>   orientation{};
-    std::optional<double>  v0{};
-    std::optional<double>  radius{};
-    std::optional<double>  timeGap{};
-    std::optional<double>  strengthNeighborRepulsion{};
-    std::optional<double>  rangeNeighborRepulsion{};
-    std::optional<double>  strengthGeometryRepulsion{};
-    std::optional<double>  rangeGeometryRepulsion{};
-    std::optional<Point>   velocity{};      // AVM, SFM
-    std::optional<double>  mass{};          // GCFM, SFM
-    std::optional<double>  reactionTime{};  // AVM, SFM; maps to tau in GCFM
+    std::optional<Point> orientation{};
+    std::optional<double> v0{};
+    std::optional<double> radius{};
+    std::optional<double> timeGap{};
+    std::optional<double> strengthNeighborRepulsion{};
+    std::optional<double> rangeNeighborRepulsion{};
+    std::optional<double> strengthGeometryRepulsion{};
+    std::optional<double> rangeGeometryRepulsion{};
+    std::optional<Point> velocity{}; // AVM, SFM
+    std::optional<double> mass{}; // GCFM, SFM
+    std::optional<double> reactionTime{}; // AVM, SFM; maps to tau in GCFM
 
     // ---- model-specific extras ----
     // std::monostate: CFS, CFSv2 (all state in common fields above)
-    using Extras = std::variant<
-        std::monostate,
-        GCFMExtras,
-        SFMExtras,
-        AVMExtras,
-        CFSv3Extras,
-        WarpExtras>;
-    Extras extras{};
+    using Extras = std::variant<GCFMExtras, SFMExtras, AVMExtras, CFSv3Extras, WarpExtras>;
+    std::optional<Extras> extras{};
 };
 
 template <>

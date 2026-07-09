@@ -118,7 +118,7 @@ void CollisionFreeSpeedModelV3::ComputeNext(
         });
 
     const auto& state = std::get<AgentState>(current.model);
-    const auto& extras = std::get<CFSv3Extras>(state.extras);
+    const auto& extras = std::get<CFSv3Extras>(*state.extras);
     const auto strengthN = state.strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion);
     const auto rangeN = state.rangeNeighborRepulsion.value_or(Defaults::rangeNeighborRepulsion);
 
@@ -165,7 +165,7 @@ void CollisionFreeSpeedModelV3::ComputeNext(
     auto& nextState = std::get<AgentState>(next.model);
     nextState.position = Pos(current) + velocity * dT;
     nextState.orientation = direction;
-    auto& nextExtras = std::get<CFSv3Extras>(nextState.extras);
+    auto& nextExtras = std::get<CFSv3Extras>(*nextState.extras);
     nextExtras.headingAngle = heading_angle;
 }
 
@@ -175,7 +175,7 @@ void CollisionFreeSpeedModelV3::CheckModelConstraint(
     const CollisionGeometry& geometry) const
 {
     const auto& state = std::get<AgentState>(agent.model);
-    const auto& extras = std::get<CFSv3Extras>(state.extras);
+    const auto& extras = std::get<CFSv3Extras>(*state.extras);
 
     validateConstraint(state.radius.value_or(Defaults::radius), 0.0, 2.0, "radius", true);
     validateConstraint(state.v0.value_or(Defaults::v0), 0.0, 10.0, "v0");
@@ -242,7 +242,7 @@ double CollisionFreeSpeedModelV3::OptimalSpeed(
     double time_gap) const
 {
     const auto& state = std::get<AgentState>(ped.model);
-    const auto& extras = std::get<CFSv3Extras>(state.extras);
+    const auto& extras = std::get<CFSv3Extras>(*state.extras);
     const auto effective_spacing = spacing - extras.agentBuffer;
     return std::min(
         std::max(effective_spacing / time_gap, MinReverseSpeed),

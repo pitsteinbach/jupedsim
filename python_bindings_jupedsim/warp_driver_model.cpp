@@ -44,7 +44,7 @@ void init_warp_driver_model(py::module_& m)
             state.orientation = orientation;
             state.radius = radius;
             state.v0 = desiredSpeed;
-            auto& extras = std::get<WarpExtras>(state.extras);
+            auto& extras = std::get<WarpExtras>(*state.extras);
             extras.stuckTime = stuckTime;
             extras.anchorX = anchorX;
             extras.anchorY = anchorY;

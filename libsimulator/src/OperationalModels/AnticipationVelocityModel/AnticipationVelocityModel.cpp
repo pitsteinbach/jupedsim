@@ -89,7 +89,7 @@ void AnticipationVelocityModel::ComputeNext(
         });
 
     const auto& state = std::get<AgentState>(current.model);
-    const auto& extras = std::get<AVMExtras>(state.extras);
+    const auto& extras = std::get<AVMExtras>(*state.extras);
 
     const auto desiredDirection = (current.destination - Pos(current)).Normalized();
     auto direction = (desiredDirection + neighborRepulsion).Normalized();
@@ -129,7 +129,7 @@ Point AnticipationVelocityModel::UpdateDirection(
     double dt) const
 {
     const auto& state = std::get<AgentState>(ped.model);
-    // const auto& extras = std::get<AVMExtras>(state.extras);
+    // const auto& extras = std::get<AVMExtras>(*state.extras);
     const auto reactionTime = state.reactionTime.value_or(Defaults::reactionTime);
     const Point desiredDirection = (ped.destination - Pos(ped)).Normalized();
     const Point actualDirection = state.orientation.value_or(Point{0.0, 0.0});
@@ -154,7 +154,7 @@ void AnticipationVelocityModel::CheckModelConstraint(
     const CollisionGeometry& geometry) const
 {
     const auto& state = std::get<AgentState>(agent.model);
-    const auto& extras = std::get<AVMExtras>(state.extras);
+    const auto& extras = std::get<AVMExtras>(*state.extras);
 
     const auto r = state.radius.value_or(Defaults::radius);
     validateConstraint(r, 0.0, 2.0, "radius", true);
@@ -271,8 +271,8 @@ Point AnticipationVelocityModel::NeighborRepulsion(
     if(!s1 || !s2) {
         return Point{};
     }
-    const auto* e1 = std::get_if<AVMExtras>(&s1->extras);
-    const auto* e2 = std::get_if<AVMExtras>(&s2->extras);
+    const auto* e1 = s1->extras ? std::get_if<AVMExtras>(&*s1->extras) : nullptr;
+    const auto* e2 = s2->extras ? std::get_if<AVMExtras>(&*s2->extras) : nullptr;
     if(!e1 || !e2) {
         return Point{};
     }

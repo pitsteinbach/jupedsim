@@ -36,7 +36,7 @@ void init_social_force_model(py::module_& m)
             state.v0 = desiredSpeed;
             state.reactionTime = reactionTime;
             state.radius = radius;
-            auto& extras = std::get<SFMExtras>(state.extras);
+            auto& extras = std::get<SFMExtras>(*state.extras);
             extras.agentScale = agentScale;
             extras.obstacleScale = obstacleScale;
             extras.forceDistance = forceDistance;

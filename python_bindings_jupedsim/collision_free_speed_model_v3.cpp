@@ -43,7 +43,7 @@ void init_collision_free_speed_model_v3(py::module_& m)
             state.timeGap = timeGap;
             state.v0 = desiredSpeed;
             state.radius = radius;
-            auto& extras = std::get<CFSv3Extras>(state.extras);
+            auto& extras = std::get<CFSv3Extras>(*state.extras);
             extras.rangeXScale = rangeXScale;
             extras.rangeYScale = rangeYScale;
             extras.thetaMaxUpperBound = thetaMaxUpperBound;

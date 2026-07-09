@@ -75,7 +75,7 @@ void GeneralizedCentrifugalForceModel::ComputeNext(
     std::optional<Point> velocity{};
     Point repwall = ForceRepRoom(current, geometry);
     const auto& state = std::get<AgentState>(current.model);
-    const auto& extras = std::get<GCFMExtras>(state.extras);
+    const auto& extras = std::get<GCFMExtras>(*state.extras);
     const auto mass = state.mass.value_or(Defaults::mass);
     const auto tau = state.reactionTime.value_or(Defaults::reactionTime);
     Point fd = ForceDriv(current, current.destination, mass, tau, dT, e0);
@@ -85,7 +85,7 @@ void GeneralizedCentrifugalForceModel::ComputeNext(
     position = Pos(current) + *velocity * dT;
 
     auto& nextState = std::get<AgentState>(next.model);
-    auto& nextExtras = std::get<GCFMExtras>(nextState.extras);
+    auto& nextExtras = std::get<GCFMExtras>(*nextState.extras);
     nextExtras.e0 = e0;
     ++nextExtras.orientationDelay;
     if(position) {
@@ -103,7 +103,7 @@ void GeneralizedCentrifugalForceModel::CheckModelConstraint(
     const CollisionGeometry& geometry) const
 {
     const auto& state = std::get<AgentState>(agent.model);
-    const auto& extras = std::get<GCFMExtras>(state.extras);
+    const auto& extras = std::get<GCFMExtras>(*state.extras);
     const auto orientation = state.orientation.value_or(Point{1.0, 0.0});
 
     if(!orientation.IsUnitLength()) {
@@ -161,7 +161,7 @@ Point GeneralizedCentrifugalForceModel::ForceDriv(
     const auto dest = ped.destination;
     const auto dist = (dest - pos).Norm();
     const auto& state = std::get<AgentState>(ped.model);
-    const auto& extras = std::get<GCFMExtras>(state.extras);
+    const auto& extras = std::get<GCFMExtras>(*state.extras);
     const auto orientation = state.orientation.value_or(Point{1.0, 0.0});
     const auto v0 = state.v0.value_or(Defaults::v0);
     if(dist > J_EPS_GOAL) {
@@ -181,8 +181,8 @@ Point GeneralizedCentrifugalForceModel::ForceRepPed(
 {
     const auto& s1 = std::get<AgentState>(ped1.model);
     const auto& s2 = std::get<AgentState>(ped2.model);
-    const auto& e1 = std::get<GCFMExtras>(s1.extras);
-    const auto& e2 = std::get<GCFMExtras>(s2.extras);
+    const auto& e1 = std::get<GCFMExtras>(*s1.extras);
+    const auto& e2 = std::get<GCFMExtras>(*s2.extras);
     const auto orientation1 = s1.orientation.value_or(Point{1.0, 0.0});
     const auto orientation2 = s2.orientation.value_or(Point{1.0, 0.0});
     const auto v0_1 = s1.v0.value_or(Defaults::v0);
@@ -304,7 +304,7 @@ inline Point GeneralizedCentrifugalForceModel::ForceRepWall(
     }
     double mind = 0.5;
     const auto& state = std::get<AgentState>(ped.model);
-    const auto& extras = std::get<GCFMExtras>(state.extras);
+    const auto& extras = std::get<GCFMExtras>(*state.extras);
     const auto orientation = state.orientation.value_or(Point{1.0, 0.0});
     double vn = w.NormalComp(orientation * extras.speed);
     F = ForceRepStatPoint(ped, pt, mind, vn);
@@ -319,7 +319,7 @@ Point GeneralizedCentrifugalForceModel::ForceRepStatPoint(
 {
     Point F_rep = Point(0.0, 0.0);
     const auto& state = std::get<AgentState>(ped.model);
-    const auto& extras = std::get<GCFMExtras>(state.extras);
+    const auto& extras = std::get<GCFMExtras>(*state.extras);
     const auto orientation = state.orientation.value_or(Point{1.0, 0.0});
     const auto v0 = state.v0.value_or(Defaults::v0);
     const Point v = orientation * extras.speed;
@@ -363,7 +363,7 @@ Point GeneralizedCentrifugalForceModel::ForceInterpolation(
     double r,
     double l) const
 {
-    const auto& extras = std::get<GCFMExtras>(state.extras);
+    const auto& extras = std::get<GCFMExtras>(*state.extras);
     const auto strengthG = state.strengthGeometryRepulsion.value_or(Defaults::strengthGeometryRepulsion);
     Point F_rep;
     double nominator = strengthG * v0 + vn;
@@ -414,8 +414,8 @@ double GeneralizedCentrifugalForceModel::AgentToAgentSpacing(
 {
     const auto& s1 = std::get<AgentState>(agent1.model);
     const auto& s2 = std::get<AgentState>(agent2.model);
-    const auto& e1 = std::get<GCFMExtras>(s1.extras);
-    const auto& e2 = std::get<GCFMExtras>(s2.extras);
+    const auto& e1 = std::get<GCFMExtras>(*s1.extras);
+    const auto& e2 = std::get<GCFMExtras>(*s2.extras);
     const Ellipse E1{e1.Av, e1.AMin, e1.BMax, e1.BMin};
     const Ellipse E2{e2.Av, e2.AMin, e2.BMax, e2.BMin};
     const auto v0_1 = s1.v0.value_or(Defaults::v0);

@@ -146,7 +146,7 @@ Point SocialForceModel::AgentForce(const GenericAgent& ped1, const GenericAgent&
 {
     const auto& s1 = std::get<AgentState>(ped1.model);
     const auto& s2 = std::get<AgentState>(ped2.model);
-    const auto& e1 = std::get<SFMExtras>(s1.extras);
+    const auto& e1 = std::get<SFMExtras>(*s1.extras);
 
     const double total_radius =
         s1.radius.value_or(Defaults::radius) + s2.radius.value_or(Defaults::radius);
@@ -167,7 +167,7 @@ Point SocialForceModel::AgentForce(const GenericAgent& ped1, const GenericAgent&
 Point SocialForceModel::ObstacleForce(const GenericAgent& agent, const LineSegment& segment) const
 {
     const auto& state = std::get<AgentState>(agent.model);
-    const auto& extras = std::get<SFMExtras>(state.extras);
+    const auto& extras = std::get<SFMExtras>(*state.extras);
     const Point pt = segment.ShortestPoint(Pos(agent));
     return ForceBetweenPoints(
         Pos(agent),

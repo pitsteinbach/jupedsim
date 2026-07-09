@@ -43,7 +43,7 @@ void init_anticipation_velocity_model(py::module_& m)
             state.timeGap = timeGap;
             state.v0 = desiredSpeed;
             state.radius = radius;
-            auto& extras = std::get<AVMExtras>(state.extras);
+            auto& extras = std::get<AVMExtras>(*state.extras);
             extras.wallBufferDistance = wallBufferDistance;
             extras.anticipationTime = anticipationTime;
             extras.pushoutStrength = pushoutStrength;

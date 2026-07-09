@@ -16,8 +16,10 @@ namespace py = pybind11;
 template <typename E>
 E& GetExtras(AgentState& s, const char* attrName)
 {
-    if(auto* e = std::get_if<E>(&s.extras)) {
-        return *e;
+    if(s.extras) {
+        if(auto* e = std::get_if<E>(&*s.extras)) {
+            return *e;
+        }
     }
     throw py::attribute_error(
         std::string("'AgentState' has no attribute '") + attrName + "'");
@@ -26,8 +28,10 @@ E& GetExtras(AgentState& s, const char* attrName)
 template <typename E>
 const E& GetExtras(const AgentState& s, const char* attrName)
 {
-    if(const auto* e = std::get_if<E>(&s.extras)) {
-        return *e;
+    if(s.extras) {
+        if(const auto* e = std::get_if<E>(&*s.extras)) {
+            return *e;
+        }
     }
     throw py::attribute_error(
         std::string("'AgentState' has no attribute '") + attrName + "'");
@@ -134,20 +138,15 @@ void init_agent_state(py::module_& m)
         .def_property(
             "extras",
             [](AgentState& s) -> py::object {
+                if(!s.extras) {
+                    return py::none();
+                }
                 return std::visit(
-                    [](auto& e) -> py::object {
-                        using T = std::decay_t<decltype(e)>;
-                        if constexpr(std::is_same_v<T, std::monostate>) {
-                            return py::none();
-                        } else {
-                            return py::cast(&e);
-                        }
-                    },
-                    s.extras);
+                    [](auto& e) -> py::object { return py::cast(&e); }, *s.extras);
             },
             [](AgentState& s, const py::object& obj) {
                 if(obj.is_none()) {
-                    s.extras = std::monostate{};
+                    s.extras = std::nullopt;
                 } else if(py::isinstance<GCFMExtras>(obj)) {
                     s.extras = obj.cast<GCFMExtras>();
                 } else if(py::isinstance<SFMExtras>(obj)) {

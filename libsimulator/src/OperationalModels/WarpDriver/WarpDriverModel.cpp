@@ -325,7 +325,7 @@ void WarpDriverModel::CheckModelConstraint(
             agent.id);
     }
     const auto& state = *statePtr;
-    const auto* extrasPtr = std::get_if<WarpExtras>(&state.extras);
+    const auto* extrasPtr = state.extras ? std::get_if<WarpExtras>(&*state.extras) : nullptr;
     if(!extrasPtr) {
         throw SimulationError(
             "WarpDriverModel constraint check: agent {} missing WarpExtras", agent.id);
@@ -391,7 +391,7 @@ void WarpDriverModel::ComputeNext(
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
     const auto& state = std::get<AgentState>(current.model);
-    const auto& extras = std::get<WarpExtras>(state.extras);
+    const auto& extras = std::get<WarpExtras>(*state.extras);
     const double speed = state.v0.value_or(Defaults::v0);
     const double agentRadius = state.radius.value_or(Defaults::radius);
 
@@ -406,7 +406,7 @@ void WarpDriverModel::ComputeNext(
     const double distToTarget = toTarget.Norm();
     if(distToTarget < 1e-9) {
         auto& nextState = std::get<AgentState>(next.model);
-        auto& nextExtras = std::get<WarpExtras>(nextState.extras);
+        auto& nextExtras = std::get<WarpExtras>(*nextState.extras);
         nextState.position = Pos(current);
         nextState.orientation = orient;
         nextExtras.stuckTime = 0.0;
@@ -602,7 +602,7 @@ void WarpDriverModel::ComputeNext(
     int detourSide = extras.detourSide;
 
     auto& nextState = std::get<AgentState>(next.model);
-    auto& nextExtras = std::get<WarpExtras>(nextState.extras);
+    auto& nextExtras = std::get<WarpExtras>(*nextState.extras);
 
     if(detourTime > 0.0) {
         detourTime -= dT;

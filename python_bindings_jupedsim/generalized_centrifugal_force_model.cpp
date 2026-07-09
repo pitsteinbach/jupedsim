@@ -47,7 +47,7 @@ void init_generalized_centrifugal_force_model(py::module_& m)
             state.v0 = desiredSpeed;
             state.strengthNeighborRepulsion = strengthNeighborRepulsion;
             state.strengthGeometryRepulsion = strengthGeometryRepulsion;
-            auto& extras = std::get<GCFMExtras>(state.extras);
+            auto& extras = std::get<GCFMExtras>(*state.extras);
             extras.speed = speed;
             extras.e0 = desiredDirection;
             extras.orientationDelay = orientationDelay;
