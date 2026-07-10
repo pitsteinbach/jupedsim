@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import jupedsim.native as py_jps
-
 if TYPE_CHECKING:
     from jupedsim.simulation import Simulation
 
@@ -169,9 +167,10 @@ class Agent:
         ``agent.model.desired_speed = 1.5``. For custom Python models this
         returns the user supplied state object.
         """
-        state = self.__resolve().model
-        if isinstance(state, py_jps._CustomModelData):
-            return state.model
+        state = self.__resolve().model  # AgentState
+        custom = state.custom_state
+        if custom is not None:
+            return custom
         return _ModelStateHandle(self.__simulation, self.__id)
 
     def __repr__(self) -> str:
@@ -182,7 +181,7 @@ class _TransientAgent:
     """Read-only view of an agent used inside custom-model callbacks.
 
     Wraps the native transient agent reference handed to
-    :meth:`~jupedsim.models.custom_model.CustomOperationalModel.compute_new_position`
+    :meth:`~jupedsim.models.custom_model.CustomOperationalModel.compute_next`
     and to neighborhood queries. Instances are only valid for the duration of
     the callback they were created in and must never be stored.
     """
@@ -226,12 +225,18 @@ class _TransientAgent:
 
         For custom models this is the user supplied state object. Treat it as
         read-only: state may only be changed by returning a new state object
-        from ``compute_new_position``.
+        from :meth:`~jupedsim.models.custom_model.CustomOperationalModel.compute_next`.
         """
-        state = self.__obj.model
-        if isinstance(state, py_jps._CustomModelData):
-            return state.model
+        state = self.__obj.model  # AgentState
+        custom = state.custom_state
+        if custom is not None:
+            return custom
         return state
+
+    @property
+    def _native(self):
+        """Raw native agent handle for use with py_jps._builtin_compute_next."""
+        return self.__obj
 
     def __repr__(self) -> str:
         return f"TransientAgent(id={self.__obj.id})"

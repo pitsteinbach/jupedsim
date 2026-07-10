@@ -83,7 +83,7 @@ void CollisionFreeSpeedModel::ComputeNext(
             return acc + BoundaryRepulsion(current, element);
         });
 
-    const auto& state = std::get<AgentState>(current.model);
+    const auto& state = current.model;
     const auto desired_direction = (current.destination - Pos(current)).Normalized();
     auto direction = (desired_direction + neighborRepulsion + boundaryRepulsion).Normalized();
     if(direction == Point{}) {
@@ -100,7 +100,7 @@ void CollisionFreeSpeedModel::ComputeNext(
     const auto optimal_speed =
         OptimalSpeed(current, spacing, state.timeGap.value_or(Defaults::timeGap));
     const auto velocity = direction * optimal_speed;
-    auto& nextState = std::get<AgentState>(next.model);
+    auto& nextState = next.model;
     nextState.position = Pos(current) + velocity * dT;
     nextState.orientation = direction;
 }
@@ -110,7 +110,7 @@ void CollisionFreeSpeedModel::CheckModelConstraint(
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
     const CollisionGeometry& geometry) const
 {
-    const auto& state = std::get<AgentState>(agent.model);
+    const auto& state = agent.model;
     const auto r = state.radius.value_or(Defaults::radius);
     constexpr double rMin = 0.;
     constexpr double rMax = 2.;
@@ -131,11 +131,8 @@ void CollisionFreeSpeedModel::CheckModelConstraint(
         if(agent.id == neighbor.id) {
             continue;
         }
-        const auto* nbState = std::get_if<AgentState>(&neighbor.model);
-        if(!nbState) {
-            continue;
-        }
-        const auto contactDist = r + nbState->radius.value_or(Defaults::radius);
+        const auto& nbState = neighbor.model;
+        const auto contactDist = r + nbState.radius.value_or(Defaults::radius);
         const auto distance = (Pos(agent) - Pos(neighbor)).Norm();
         if(contactDist >= distance) {
             throw SimulationError(
@@ -161,7 +158,7 @@ double CollisionFreeSpeedModel::OptimalSpeed(
     double spacing,
     double time_gap) const
 {
-    const auto& state = std::get<AgentState>(ped.model);
+    const auto& state = ped.model;
     return std::min(std::max(spacing / time_gap, 0.0), state.v0.value_or(Defaults::v0));
 }
 
@@ -170,17 +167,14 @@ double CollisionFreeSpeedModel::GetSpacing(
     const GenericAgent& ped2,
     const Point& direction) const
 {
-    const auto* s1 = std::get_if<AgentState>(&ped1.model);
-    const auto* s2 = std::get_if<AgentState>(&ped2.model);
-    if(!s1 || !s2) {
-        return std::numeric_limits<double>::max();
-    }
+    const auto& s1 = ped1.model;
+    const auto& s2 = ped2.model;
     const auto distp12 = Pos(ped2) - Pos(ped1);
     if(direction.ScalarProduct(distp12) < 0) {
         return std::numeric_limits<double>::max();
     }
     const auto left = direction.Rotate90Deg();
-    const auto l = s1->radius.value_or(Defaults::radius) + s2->radius.value_or(Defaults::radius);
+    const auto l = s1.radius.value_or(Defaults::radius) + s2.radius.value_or(Defaults::radius);
     if(std::abs(left.ScalarProduct(distp12)) > l) {
         return std::numeric_limits<double>::max();
     }
@@ -191,16 +185,13 @@ Point CollisionFreeSpeedModel::NeighborRepulsion(
     const GenericAgent& ped1,
     const GenericAgent& ped2) const
 {
-    const auto* s1 = std::get_if<AgentState>(&ped1.model);
-    const auto* s2 = std::get_if<AgentState>(&ped2.model);
-    if(!s1 || !s2) {
-        return Point{};
-    }
+    const auto& s1 = ped1.model;
+    const auto& s2 = ped2.model;
     const auto distp12 = Pos(ped2) - Pos(ped1);
     const auto [distance, direction] = distp12.NormAndNormalized();
-    const auto l = s1->radius.value_or(Defaults::radius) + s2->radius.value_or(Defaults::radius);
-    const auto strengthN = s1->strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion);
-    const auto rangeN = s1->rangeNeighborRepulsion.value_or(Defaults::rangeNeighborRepulsion);
+    const auto l = s1.radius.value_or(Defaults::radius) + s2.radius.value_or(Defaults::radius);
+    const auto strengthN = s1.strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion);
+    const auto rangeN = s1.rangeNeighborRepulsion.value_or(Defaults::rangeNeighborRepulsion);
     return direction * -(strengthN * std::exp((l - distance) / rangeN));
 }
 
@@ -211,7 +202,7 @@ Point CollisionFreeSpeedModel::BoundaryRepulsion(
     const auto pt = boundary_segment.ShortestPoint(Pos(ped));
     const auto dist_vec = pt - Pos(ped);
     const auto [dist, e_iw] = dist_vec.NormAndNormalized();
-    const auto& state = std::get<AgentState>(ped.model);
+    const auto& state = ped.model;
     const auto l = state.radius.value_or(Defaults::radius);
     const auto strengthG = state.strengthGeometryRepulsion.value_or(Defaults::strengthGeometryRepulsion);
     const auto rangeG = state.rangeGeometryRepulsion.value_or(Defaults::rangeGeometryRepulsion);

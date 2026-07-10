@@ -1020,7 +1020,7 @@ class _MinimalCustomState:
 
 
 class _MinimalCustomModel(jps.CustomOperationalModel):
-    def compute_new_position(self, dt, ped, geometry, neighborhood_search):
+    def compute_next(self, dt, ped, geometry, neighborhood_search):
         return _MinimalCustomState(position=ped.position)
 
 
@@ -1075,12 +1075,12 @@ class _NoPositionState:
 
 
 class _NoPositionModel(jps.CustomOperationalModel):
-    def compute_new_position(self, dt, ped, geometry, neighborhood_search):
+    def compute_next(self, dt, ped, geometry, neighborhood_search):
         return _NoPositionState()
 
 
 class _WrongPositionTypeModel(jps.CustomOperationalModel):
-    def compute_new_position(self, dt, ped, geometry, neighborhood_search):
+    def compute_next(self, dt, ped, geometry, neighborhood_search):
         return _MinimalCustomState(position="not-a-tuple")
 
 
@@ -1102,7 +1102,7 @@ def test_custom_model_update_missing_position_names_source():
 
     with pytest.raises(
         jps.SimulationError,
-        match=r"State returned by compute_new_position\(\) is missing the 'position' attribute",
+        match=r"State returned by compute_next\(\) is missing the 'position' attribute",
     ):
         simulation.iterate()
 
@@ -1112,7 +1112,7 @@ def test_custom_model_update_wrong_position_type_names_source():
 
     with pytest.raises(
         jps.SimulationError,
-        match=r"State returned by compute_new_position\(\) has attribute 'position' of wrong type",
+        match=r"State returned by compute_next\(\) has attribute 'position' of wrong type",
     ):
         simulation.iterate()
 
@@ -1126,7 +1126,7 @@ class _AddAgentDuringIterateModel(jps.CustomOperationalModel):
         self.stage_id = None
         self.error = None
 
-    def compute_new_position(self, dt, ped, geometry, neighborhood_search):
+    def compute_next(self, dt, ped, geometry, neighborhood_search):
         try:
             self.simulation.add_agent(
                 self.journey_id,

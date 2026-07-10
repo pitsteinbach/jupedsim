@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "AgentState.hpp"
+#include "OperationalModels/CustomModel/CustomModelState.hpp"
 #include "OperationalModels/OperationalModelType.hpp"
+#include "Visitor.hpp"
+#include "python_model.hpp"
 #include "type_casters.hpp" // IWYU pragma: keep
 
 #include <pybind11/cast.h>
@@ -134,7 +137,8 @@ void init_agent_state(py::module_& m)
             "tau",
             [](const AgentState& s) { return s.reactionTime; },
             [](AgentState& s, std::optional<double> v) { s.reactionTime = v; })
-        // Raw extras variant (for type inspection or bulk replacement)
+        // Raw extras variant: returns the active extras object, or None.
+        // For custom model agents (CustomModelState), returns the Python state object directly.
         .def_property(
             "extras",
             [](AgentState& s) -> py::object {
@@ -142,7 +146,12 @@ void init_agent_state(py::module_& m)
                     return py::none();
                 }
                 return std::visit(
-                    [](auto& e) -> py::object { return py::cast(&e); }, *s.extras);
+                    overloaded{
+                        [](CustomModelState& cs) -> py::object {
+                            return cs.Get<GilSafePyObject>().Get();
+                        },
+                        [](auto& e) -> py::object { return py::cast(&e); }},
+                    *s.extras);
             },
             [](AgentState& s, const py::object& obj) {
                 if(obj.is_none()) {
@@ -162,6 +171,18 @@ void init_agent_state(py::module_& m)
                         "extras must be GCFMExtras, SFMExtras, AVMExtras, "
                         "CFSv3Extras, WarpExtras, or None");
                 }
+            })
+        // Convenience: returns the Python custom state for custom model agents, None otherwise.
+        .def_property_readonly(
+            "custom_state",
+            [](AgentState& s) -> py::object {
+                if(!s.extras) {
+                    return py::none();
+                }
+                if(auto* cs = std::get_if<CustomModelState>(&*s.extras)) {
+                    return cs->Get<GilSafePyObject>().Get();
+                }
+                return py::none();
             })
         // ---- GCFM-specific extras ----
         .def_property(

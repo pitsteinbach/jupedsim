@@ -74,7 +74,7 @@ void GeneralizedCentrifugalForceModel::ComputeNext(
     std::optional<Point> position{};
     std::optional<Point> velocity{};
     Point repwall = ForceRepRoom(current, geometry);
-    const auto& state = std::get<AgentState>(current.model);
+    const auto& state = current.model;
     const auto& extras = std::get<GCFMExtras>(*state.extras);
     const auto mass = state.mass.value_or(Defaults::mass);
     const auto tau = state.reactionTime.value_or(Defaults::reactionTime);
@@ -84,7 +84,7 @@ void GeneralizedCentrifugalForceModel::ComputeNext(
     velocity = (state.orientation.value_or(Point{1.0, 0.0}) * extras.speed) + acc * dT;
     position = Pos(current) + *velocity * dT;
 
-    auto& nextState = std::get<AgentState>(next.model);
+    auto& nextState = next.model;
     auto& nextExtras = std::get<GCFMExtras>(*nextState.extras);
     nextExtras.e0 = e0;
     ++nextExtras.orientationDelay;
@@ -102,7 +102,7 @@ void GeneralizedCentrifugalForceModel::CheckModelConstraint(
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
     const CollisionGeometry& geometry) const
 {
-    const auto& state = std::get<AgentState>(agent.model);
+    const auto& state = agent.model;
     const auto& extras = std::get<GCFMExtras>(*state.extras);
     const auto orientation = state.orientation.value_or(Point{1.0, 0.0});
 
@@ -160,7 +160,7 @@ Point GeneralizedCentrifugalForceModel::ForceDriv(
     const auto pos = Pos(ped);
     const auto dest = ped.destination;
     const auto dist = (dest - pos).Norm();
-    const auto& state = std::get<AgentState>(ped.model);
+    const auto& state = ped.model;
     const auto& extras = std::get<GCFMExtras>(*state.extras);
     const auto orientation = state.orientation.value_or(Point{1.0, 0.0});
     const auto v0 = state.v0.value_or(Defaults::v0);
@@ -179,8 +179,8 @@ Point GeneralizedCentrifugalForceModel::ForceRepPed(
     const GenericAgent& ped1,
     const GenericAgent& ped2) const
 {
-    const auto& s1 = std::get<AgentState>(ped1.model);
-    const auto& s2 = std::get<AgentState>(ped2.model);
+    const auto& s1 = ped1.model;
+    const auto& s2 = ped2.model;
     const auto& e1 = std::get<GCFMExtras>(*s1.extras);
     const auto& e2 = std::get<GCFMExtras>(*s2.extras);
     const auto orientation1 = s1.orientation.value_or(Point{1.0, 0.0});
@@ -303,7 +303,7 @@ inline Point GeneralizedCentrifugalForceModel::ForceRepWall(
         return F;
     }
     double mind = 0.5;
-    const auto& state = std::get<AgentState>(ped.model);
+    const auto& state = ped.model;
     const auto& extras = std::get<GCFMExtras>(*state.extras);
     const auto orientation = state.orientation.value_or(Point{1.0, 0.0});
     double vn = w.NormalComp(orientation * extras.speed);
@@ -318,7 +318,7 @@ Point GeneralizedCentrifugalForceModel::ForceRepStatPoint(
     double vn) const
 {
     Point F_rep = Point(0.0, 0.0);
-    const auto& state = std::get<AgentState>(ped.model);
+    const auto& state = ped.model;
     const auto& extras = std::get<GCFMExtras>(*state.extras);
     const auto orientation = state.orientation.value_or(Point{1.0, 0.0});
     const auto v0 = state.v0.value_or(Defaults::v0);
@@ -412,8 +412,8 @@ double GeneralizedCentrifugalForceModel::AgentToAgentSpacing(
     const GenericAgent& agent1,
     const GenericAgent& agent2) const
 {
-    const auto& s1 = std::get<AgentState>(agent1.model);
-    const auto& s2 = std::get<AgentState>(agent2.model);
+    const auto& s1 = agent1.model;
+    const auto& s2 = agent2.model;
     const auto& e1 = std::get<GCFMExtras>(*s1.extras);
     const auto& e2 = std::get<GCFMExtras>(*s2.extras);
     const Ellipse E1{e1.Av, e1.AMin, e1.BMax, e1.BMin};

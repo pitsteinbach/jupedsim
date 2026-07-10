@@ -117,7 +117,7 @@ void CollisionFreeSpeedModelV3::ComputeNext(
             return acc + BoundaryRepulsion(current, element);
         });
 
-    const auto& state = std::get<AgentState>(current.model);
+    const auto& state = current.model;
     const auto& extras = std::get<CFSv3Extras>(*state.extras);
     const auto strengthN = state.strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion);
     const auto rangeN = state.rangeNeighborRepulsion.value_or(Defaults::rangeNeighborRepulsion);
@@ -162,7 +162,7 @@ void CollisionFreeSpeedModelV3::ComputeNext(
     const auto optimal_speed =
         OptimalSpeed(current, spacing, state.timeGap.value_or(Defaults::timeGap));
     const auto velocity = direction * optimal_speed;
-    auto& nextState = std::get<AgentState>(next.model);
+    auto& nextState = next.model;
     nextState.position = Pos(current) + velocity * dT;
     nextState.orientation = direction;
     auto& nextExtras = std::get<CFSv3Extras>(*nextState.extras);
@@ -174,7 +174,7 @@ void CollisionFreeSpeedModelV3::CheckModelConstraint(
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
     const CollisionGeometry& geometry) const
 {
-    const auto& state = std::get<AgentState>(agent.model);
+    const auto& state = agent.model;
     const auto& extras = std::get<CFSv3Extras>(*state.extras);
 
     validateConstraint(state.radius.value_or(Defaults::radius), 0.0, 2.0, "radius", true);
@@ -211,11 +211,8 @@ void CollisionFreeSpeedModelV3::CheckModelConstraint(
         if(agent.id == neighbor.id) {
             continue;
         }
-        const auto* nbState = std::get_if<AgentState>(&neighbor.model);
-        if(!nbState) {
-            continue;
-        }
-        const auto contactDist = r + nbState->radius.value_or(Defaults::radius);
+        const auto& nbState = neighbor.model;
+        const auto contactDist = r + nbState.radius.value_or(Defaults::radius);
         const auto distance = (Pos(agent) - Pos(neighbor)).Norm();
         if(contactDist >= distance) {
             throw SimulationError(
@@ -241,7 +238,7 @@ double CollisionFreeSpeedModelV3::OptimalSpeed(
     double spacing,
     double time_gap) const
 {
-    const auto& state = std::get<AgentState>(ped.model);
+    const auto& state = ped.model;
     const auto& extras = std::get<CFSv3Extras>(*state.extras);
     const auto effective_spacing = spacing - extras.agentBuffer;
     return std::min(
@@ -254,17 +251,14 @@ double CollisionFreeSpeedModelV3::GetSpacing(
     const GenericAgent& ped2,
     const Point& direction) const
 {
-    const auto* s1 = std::get_if<AgentState>(&ped1.model);
-    const auto* s2 = std::get_if<AgentState>(&ped2.model);
-    if(!s1 || !s2) {
-        return std::numeric_limits<double>::max();
-    }
+    const auto& s1 = ped1.model;
+    const auto& s2 = ped2.model;
     const auto distp12 = Pos(ped2) - Pos(ped1);
     if(direction.ScalarProduct(distp12) < 0.0) {
         return std::numeric_limits<double>::max();
     }
     const auto left = direction.Rotate90Deg();
-    const auto l = s1->radius.value_or(Defaults::radius) + s2->radius.value_or(Defaults::radius);
+    const auto l = s1.radius.value_or(Defaults::radius) + s2.radius.value_or(Defaults::radius);
     if(std::abs(left.ScalarProduct(distp12)) > l) {
         return std::numeric_limits<double>::max();
     }
@@ -278,7 +272,7 @@ Point CollisionFreeSpeedModelV3::BoundaryRepulsion(
     const auto pt = boundary_segment.ShortestPoint(Pos(ped));
     const auto dist_vec = pt - Pos(ped);
     const auto [dist, e_iw] = dist_vec.NormAndNormalized();
-    const auto& state = std::get<AgentState>(ped.model);
+    const auto& state = ped.model;
     const auto l = state.radius.value_or(Defaults::radius);
     const auto strengthG = state.strengthGeometryRepulsion.value_or(Defaults::strengthGeometryRepulsion);
     const auto rangeG = state.rangeGeometryRepulsion.value_or(Defaults::rangeGeometryRepulsion);

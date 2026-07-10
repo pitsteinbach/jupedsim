@@ -2,6 +2,7 @@
 #pragma once
 
 #include "OperationalModelType.hpp"
+#include "OperationalModels/CustomModel/CustomModelState.hpp"
 #include "Point.hpp"
 
 #include <fmt/core.h>
@@ -66,12 +67,18 @@ struct WarpExtras {
     int numSamples{20};
 };
 
-/// Unified per-agent state for all built-in operational models.
+/// Unified per-agent state for all operational models (built-in and Python custom).
 ///
 /// Common fields are std::optional<T>: nullopt means "use the model's own default".
 /// The active model reads a field via field.value_or(Model::Defaults::fieldName).
-/// Model-specific state lives in the Extras variant; std::monostate means no extras
-/// (CFS and CFSv2 are fully covered by common fields).
+/// Model-specific state lives in the Extras variant:
+///   - nullopt:          CFS, CFSv2 (fully covered by common fields)
+///   - GCFMExtras:       GeneralizedCentrifugalForceModel
+///   - SFMExtras:        SocialForceModel
+///   - AVMExtras:        AnticipationVelocityModel
+///   - CFSv3Extras:      CollisionFreeSpeedModelV3
+///   - WarpExtras:       WarpDriverModel
+///   - CustomModelState: Python custom model (payload is a GilSafePyObject)
 ///
 /// On a model switch: retain the existing common optionals (preserving any explicit
 /// user values) and replace extras with the new model's Extras struct.
@@ -95,8 +102,13 @@ struct AgentState {
     std::optional<double> reactionTime{}; // AVM, SFM; maps to tau in GCFM
 
     // ---- model-specific extras ----
-    // std::monostate: CFS, CFSv2 (all state in common fields above)
-    using Extras = std::variant<GCFMExtras, SFMExtras, AVMExtras, CFSv3Extras, WarpExtras>;
+    using Extras = std::variant<
+        GCFMExtras,
+        SFMExtras,
+        AVMExtras,
+        CFSv3Extras,
+        WarpExtras,
+        CustomModelState>;
     std::optional<Extras> extras{};
 };
 

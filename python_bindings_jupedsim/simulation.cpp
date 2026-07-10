@@ -6,7 +6,6 @@
 #include "GenericAgent.hpp"
 #include "Journey.hpp"
 #include "OperationalModel.hpp"
-#include "OperationalModels/CustomModel/CustomModelData.hpp"
 #include "OperationalModels/OperationalModelType.hpp"
 #include "Polygon.hpp"
 #include "Stage.hpp"
@@ -111,12 +110,6 @@ void init_simulation(py::module_& m)
         .def(
             "add_agent",
             &AddAgentWithState<AgentState>,
-            py::arg("journey_id"),
-            py::arg("stage_id"),
-            py::arg("state"))
-        .def(
-            "add_agent",
-            &AddAgentWithState<CustomModelData>,
             py::arg("journey_id"),
             py::arg("stage_id"),
             py::arg("state"))

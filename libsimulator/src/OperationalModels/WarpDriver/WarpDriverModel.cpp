@@ -318,13 +318,7 @@ void WarpDriverModel::CheckModelConstraint(
     const NeighborhoodSearch<GenericAgent>& /*neighborhoodSearch*/,
     const CollisionGeometry& /*geometry*/) const
 {
-    const auto* statePtr = std::get_if<AgentState>(&agent.model);
-    if(!statePtr) {
-        throw SimulationError(
-            "WarpDriverModel constraint check: agent {} does not have WarpDriverModel data",
-            agent.id);
-    }
-    const auto& state = *statePtr;
+    const auto& state = agent.model;
     const auto* extrasPtr = state.extras ? std::get_if<WarpExtras>(&*state.extras) : nullptr;
     if(!extrasPtr) {
         throw SimulationError(
@@ -390,7 +384,7 @@ void WarpDriverModel::ComputeNext(
     const CollisionGeometry& geometry,
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
-    const auto& state = std::get<AgentState>(current.model);
+    const auto& state = current.model;
     const auto& extras = std::get<WarpExtras>(*state.extras);
     const double speed = state.v0.value_or(Defaults::v0);
     const double agentRadius = state.radius.value_or(Defaults::radius);
@@ -405,7 +399,7 @@ void WarpDriverModel::ComputeNext(
     Point toTarget = current.destination - Pos(current);
     const double distToTarget = toTarget.Norm();
     if(distToTarget < 1e-9) {
-        auto& nextState = std::get<AgentState>(next.model);
+        auto& nextState = next.model;
         auto& nextExtras = std::get<WarpExtras>(*nextState.extras);
         nextState.position = Pos(current);
         nextState.orientation = orient;
@@ -427,11 +421,8 @@ void WarpDriverModel::ComputeNext(
         if(neighbor.id == current.id) {
             continue;
         }
-        const auto* nbState = std::get_if<AgentState>(&neighbor.model);
-        if(!nbState) {
-            continue;
-        }
-        const double nbRadius = nbState->radius.value_or(Defaults::radius);
+        const auto& nbState = neighbor.model;
+        const double nbRadius = nbState.radius.value_or(Defaults::radius);
         Point diff = Pos(current) - Pos(neighbor);
         const double dist = diff.Norm();
         const double combinedRadius = agentRadius + nbRadius;
@@ -464,19 +455,15 @@ void WarpDriverModel::ComputeNext(
         if(neighbor.id == current.id) {
             continue;
         }
-        const auto* nbState = std::get_if<AgentState>(&neighbor.model);
-        if(!nbState) {
-            continue;
-        }
-
-        Point nbOrient = nbState->orientation.value_or(Point{0.0, 0.0});
+        const auto& nbState = neighbor.model;
+        Point nbOrient = nbState.orientation.value_or(Point{0.0, 0.0});
         if(nbOrient.Norm() < 1e-9) {
             nbOrient = Point{1.0, 0.0};
         } else {
             nbOrient = nbOrient.Normalized();
         }
-        const double nbSpeed = nbState->v0.value_or(Defaults::v0);
-        const double nbRadius = nbState->radius.value_or(Defaults::radius);
+        const double nbSpeed = nbState.v0.value_or(Defaults::v0);
+        const double nbRadius = nbState.radius.value_or(Defaults::radius);
 
         WarpParams wp{};
         wp.posA = Pos(current);
@@ -601,7 +588,7 @@ void WarpDriverModel::ComputeNext(
     double detourTime = extras.detourTime;
     int detourSide = extras.detourSide;
 
-    auto& nextState = std::get<AgentState>(next.model);
+    auto& nextState = next.model;
     auto& nextExtras = std::get<WarpExtras>(*nextState.extras);
 
     if(detourTime > 0.0) {

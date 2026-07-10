@@ -48,7 +48,7 @@ void SocialForceModel::ComputeNext(
     const CollisionGeometry& geometry,
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
-    const auto& state = std::get<AgentState>(current.model);
+    const auto& state = current.model;
     const auto mass = state.mass.value_or(Defaults::mass);
     auto forces = DrivingForce(current);
 
@@ -75,7 +75,7 @@ void SocialForceModel::ComputeNext(
 
     const auto currentVelocity = state.velocity.value_or(Point{0.0, 0.0});
     const auto velocity = currentVelocity + forces * dT;
-    auto& nextState = std::get<AgentState>(next.model);
+    auto& nextState = next.model;
     nextState.position = Pos(current) + velocity * dT;
     nextState.velocity = velocity;
 }
@@ -96,7 +96,7 @@ void SocialForceModel::CheckModelConstraint(
         }
     };
 
-    const auto& state = std::get<AgentState>(agent.model);
+    const auto& state = agent.model;
     throwIfNegative(state.mass.value_or(Defaults::mass), "mass");
     throwIfNegative(state.v0.value_or(Defaults::v0), "desired speed");
     throwIfNegative(state.reactionTime.value_or(Defaults::reactionTime), "reaction time");
@@ -129,7 +129,7 @@ void SocialForceModel::CheckModelConstraint(
 
 Point SocialForceModel::DrivingForce(const GenericAgent& agent)
 {
-    const auto& state = std::get<AgentState>(agent.model);
+    const auto& state = agent.model;
     const Point e0 = (agent.destination - Pos(agent)).Normalized();
     const auto v0 = state.v0.value_or(Defaults::v0);
     const auto reactionTime = state.reactionTime.value_or(Defaults::reactionTime);
@@ -144,8 +144,8 @@ double SocialForceModel::PushingForceLength(double A, double B, double r, double
 
 Point SocialForceModel::AgentForce(const GenericAgent& ped1, const GenericAgent& ped2) const
 {
-    const auto& s1 = std::get<AgentState>(ped1.model);
-    const auto& s2 = std::get<AgentState>(ped2.model);
+    const auto& s1 = ped1.model;
+    const auto& s2 = ped2.model;
     const auto& e1 = std::get<SFMExtras>(*s1.extras);
 
     const double total_radius =
@@ -166,7 +166,7 @@ Point SocialForceModel::AgentForce(const GenericAgent& ped1, const GenericAgent&
 
 Point SocialForceModel::ObstacleForce(const GenericAgent& agent, const LineSegment& segment) const
 {
-    const auto& state = std::get<AgentState>(agent.model);
+    const auto& state = agent.model;
     const auto& extras = std::get<SFMExtras>(*state.extras);
     const Point pt = segment.ShortestPoint(Pos(agent));
     return ForceBetweenPoints(

@@ -74,7 +74,7 @@ class CustomOperationalModel(ABC):
     """
 
     @abstractmethod
-    def compute_new_position(
+    def compute_next(
         self,
         dt: float,
         ped: _TransientAgent,
@@ -92,7 +92,7 @@ class CustomOperationalModel(ABC):
         """Raise an exception when ``ped`` violates this model's constraints."""
         pass
 
-    def _compute_new_position(
+    def _compute_next(
         self,
         dt,
         ped,
@@ -103,7 +103,7 @@ class CustomOperationalModel(ABC):
         from jupedsim.geometry import Geometry
         from jupedsim.neighborhood import NeighborhoodSearch
 
-        return self.compute_new_position(
+        return self.compute_next(
             dt,
             _TransientAgent(ped),
             Geometry(geometry),

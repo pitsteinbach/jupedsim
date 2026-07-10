@@ -88,7 +88,7 @@ void AnticipationVelocityModel::ComputeNext(
             return res + NeighborRepulsion(current, neighbor);
         });
 
-    const auto& state = std::get<AgentState>(current.model);
+    const auto& state = current.model;
     const auto& extras = std::get<AVMExtras>(*state.extras);
 
     const auto desiredDirection = (current.destination - Pos(current)).Normalized();
@@ -117,7 +117,7 @@ void AnticipationVelocityModel::ComputeNext(
         extras.pushoutStrength);
 
     const auto velocity = direction * optimal_speed;
-    auto& nextState = std::get<AgentState>(next.model);
+    auto& nextState = next.model;
     nextState.position = Pos(current) + velocity * dT;
     nextState.orientation = direction;
     nextState.velocity = velocity;
@@ -128,7 +128,7 @@ Point AnticipationVelocityModel::UpdateDirection(
     const Point& calculatedDirection,
     double dt) const
 {
-    const auto& state = std::get<AgentState>(ped.model);
+    const auto& state = ped.model;
     // const auto& extras = std::get<AVMExtras>(*state.extras);
     const auto reactionTime = state.reactionTime.value_or(Defaults::reactionTime);
     const Point desiredDirection = (ped.destination - Pos(ped)).Normalized();
@@ -153,7 +153,7 @@ void AnticipationVelocityModel::CheckModelConstraint(
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch,
     const CollisionGeometry& geometry) const
 {
-    const auto& state = std::get<AgentState>(agent.model);
+    const auto& state = agent.model;
     const auto& extras = std::get<AVMExtras>(*state.extras);
 
     const auto r = state.radius.value_or(Defaults::radius);
@@ -181,11 +181,8 @@ void AnticipationVelocityModel::CheckModelConstraint(
         if(agent.id == neighbor.id) {
             continue;
         }
-        const auto* nbState = std::get_if<AgentState>(&neighbor.model);
-        if(!nbState) {
-            continue;
-        }
-        const auto contactDist = r + nbState->radius.value_or(Defaults::radius);
+        const auto& nbState = neighbor.model;
+        const auto contactDist = r + nbState.radius.value_or(Defaults::radius);
         const auto distance = (Pos(agent) - Pos(neighbor)).Norm();
         if(contactDist >= distance) {
             throw SimulationError(
@@ -211,7 +208,7 @@ double AnticipationVelocityModel::OptimalSpeed(
     double spacing,
     double time_gap) const
 {
-    const auto& state = std::get<AgentState>(ped.model);
+    const auto& state = ped.model;
     constexpr double creep_speed = 0.01;
     double speed = spacing / time_gap;
     if(std::abs(speed) < creep_speed) {
@@ -226,11 +223,8 @@ double AnticipationVelocityModel::GetSpacing(
     const GenericAgent& ped2,
     const Point& direction) const
 {
-    const auto* s1 = std::get_if<AgentState>(&ped1.model);
-    const auto* s2 = std::get_if<AgentState>(&ped2.model);
-    if(!s1 || !s2) {
-        return std::numeric_limits<double>::max();
-    }
+    const auto& s1 = ped1.model;
+    const auto& s2 = ped2.model;
     const auto distp12 = Pos(ped2) - Pos(ped1);
     if(direction.ScalarProduct(distp12) < 0) {
         return std::numeric_limits<double>::max();
@@ -238,7 +232,7 @@ double AnticipationVelocityModel::GetSpacing(
     const auto left = direction.Rotate90Deg();
     constexpr double buffer = 0.02;
     const auto l =
-        s1->radius.value_or(Defaults::radius) + s2->radius.value_or(Defaults::radius) + buffer;
+        s1.radius.value_or(Defaults::radius) + s2.radius.value_or(Defaults::radius) + buffer;
     if(std::abs(left.ScalarProduct(distp12)) > l) {
         return std::numeric_limits<double>::max();
     }
@@ -266,13 +260,10 @@ Point AnticipationVelocityModel::NeighborRepulsion(
     const GenericAgent& ped1,
     const GenericAgent& ped2) const
 {
-    const auto* s1 = std::get_if<AgentState>(&ped1.model);
-    const auto* s2 = std::get_if<AgentState>(&ped2.model);
-    if(!s1 || !s2) {
-        return Point{};
-    }
-    const auto* e1 = s1->extras ? std::get_if<AVMExtras>(&*s1->extras) : nullptr;
-    const auto* e2 = s2->extras ? std::get_if<AVMExtras>(&*s2->extras) : nullptr;
+    const auto& s1 = ped1.model;
+    const auto& s2 = ped2.model;
+    const auto* e1 = s1.extras ? std::get_if<AVMExtras>(&*s1.extras) : nullptr;
+    const auto* e2 = s2.extras ? std::get_if<AVMExtras>(&*s2.extras) : nullptr;
     if(!e1 || !e2) {
         return Point{};
     }
@@ -280,13 +271,13 @@ Point AnticipationVelocityModel::NeighborRepulsion(
     const auto distp12 = Pos(ped2) - Pos(ped1);
     const auto [distance, ep12] = distp12.NormAndNormalized();
     const double adjustedDist =
-        distance - (s1->radius.value_or(Defaults::radius) + s2->radius.value_or(Defaults::radius));
+        distance - (s1.radius.value_or(Defaults::radius) + s2.radius.value_or(Defaults::radius));
 
-    const auto& orientation1 = s1->orientation.value_or(Point{0.0, 0.0});
+    const auto& orientation1 = s1.orientation.value_or(Point{0.0, 0.0});
     const auto& d1 = (ped1.destination - Pos(ped1)).Normalized();
-    const auto& orientation2 = s2->orientation.value_or(Point{0.0, 0.0});
-    const auto& velocity1 = s1->velocity.value_or(Point{0.0, 0.0});
-    const auto& velocity2 = s2->velocity.value_or(Point{0.0, 0.0});
+    const auto& orientation2 = s2.orientation.value_or(Point{0.0, 0.0});
+    const auto& velocity1 = s1.velocity.value_or(Point{0.0, 0.0});
+    const auto& velocity2 = s2.velocity.value_or(Point{0.0, 0.0});
 
     const auto inPerceptionRange =
         d1.ScalarProduct(ep12) >= 0 || orientation1.ScalarProduct(ep12) >= 0;
@@ -302,8 +293,8 @@ Point AnticipationVelocityModel::NeighborRepulsion(
     const double alignmentFactor =
         alignmentBase + alignmentWeight * (1.0 - d1.ScalarProduct(orientation2));
     const auto strengthN =
-        s1->strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion);
-    const auto rangeN = s1->rangeNeighborRepulsion.value_or(Defaults::rangeNeighborRepulsion);
+        s1.strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion);
+    const auto rangeN = s1.rangeNeighborRepulsion.value_or(Defaults::rangeNeighborRepulsion);
     const double interactionStrength = strengthN * alignmentFactor * std::exp(-R_dist / rangeN);
     const auto newep12 = distp12 + velocity2 * e2->anticipationTime;
 

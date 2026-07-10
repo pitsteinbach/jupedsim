@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "AgentState.hpp"
-#include "OperationalModels/GeneralizedCentrifugalForceModel/GeneralizedCentrifugalForceModel.hpp"
+#include "CollisionGeometry.hpp"
+#include "GenericAgent.hpp"
+#include "NeighborhoodSearch.hpp"
 #include "OperationalModel.hpp"
+#include "OperationalModels/GeneralizedCentrifugalForceModel/GeneralizedCentrifugalForceModel.hpp"
 #include "type_casters.hpp" // IWYU pragma: keep
 
 #include <pybind11/cast.h>
@@ -16,7 +19,33 @@ void init_generalized_centrifugal_force_model(py::module_& m)
 {
     py::class_<GeneralizedCentrifugalForceModel, OperationalModel, py::smart_holder>(
         m, "GeneralizedCentrifugalForceModel")
-        .def(py::init<>());
+        .def(py::init<>())
+        .def(
+            "compute_next",
+            [](const GeneralizedCentrifugalForceModel& self,
+               double dt,
+               const GenericAgent& current,
+               GenericAgent& next,
+               const CollisionGeometry& geometry,
+               const NeighborhoodSearch<GenericAgent>& ns) {
+                self.ComputeNext(dt, current, next, geometry, ns);
+            },
+            py::arg("dt"),
+            py::arg("current"),
+            py::arg("next"),
+            py::arg("geometry"),
+            py::arg("neighborhood_search"))
+        .def(
+            "check_model_constraint",
+            [](const GeneralizedCentrifugalForceModel& self,
+               const GenericAgent& agent,
+               const NeighborhoodSearch<GenericAgent>& ns,
+               const CollisionGeometry& geometry) {
+                self.CheckModelConstraint(agent, ns, geometry);
+            },
+            py::arg("agent"),
+            py::arg("neighborhood_search"),
+            py::arg("geometry"));
 
     m.def(
         "GeneralizedCentrifugalForceModelState",

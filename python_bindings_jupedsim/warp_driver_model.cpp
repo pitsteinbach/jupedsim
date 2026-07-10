@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "AgentState.hpp"
+#include "CollisionGeometry.hpp"
+#include "GenericAgent.hpp"
+#include "NeighborhoodSearch.hpp"
 #include "OperationalModel.hpp"
 #include "OperationalModels/WarpDriver/WarpDriverModel.hpp"
 #include "type_casters.hpp" // IWYU pragma: keep
@@ -21,7 +24,33 @@ void init_warp_driver_model(py::module_& m)
             py::init<double, uint64_t>(),
             py::kw_only(),
             py::arg("sigma") = 0.3,
-            py::arg("rng_seed") = 42);
+            py::arg("rng_seed") = 42)
+        .def(
+            "compute_next",
+            [](const WarpDriverModel& self,
+               double dt,
+               const GenericAgent& current,
+               GenericAgent& next,
+               const CollisionGeometry& geometry,
+               const NeighborhoodSearch<GenericAgent>& ns) {
+                self.ComputeNext(dt, current, next, geometry, ns);
+            },
+            py::arg("dt"),
+            py::arg("current"),
+            py::arg("next"),
+            py::arg("geometry"),
+            py::arg("neighborhood_search"))
+        .def(
+            "check_model_constraint",
+            [](const WarpDriverModel& self,
+               const GenericAgent& agent,
+               const NeighborhoodSearch<GenericAgent>& ns,
+               const CollisionGeometry& geometry) {
+                self.CheckModelConstraint(agent, ns, geometry);
+            },
+            py::arg("agent"),
+            py::arg("neighborhood_search"),
+            py::arg("geometry"));
 
     m.def(
         "WarpDriverModelState",

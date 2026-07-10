@@ -1,24 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 #include "AgentState.hpp"
-#include "OperationalModels/CustomModel/CustomModelData.hpp"
 #include "OperationalModels/OperationalModelType.hpp"
 #include "Point.hpp"
 #include "UniqueID.hpp"
-#include "Visitor.hpp"
 
 #include <fmt/core.h>
 
 #include <deque>
 #include <utility>
-#include <variant>
 
 class Journey;
 class BaseStage;
-
-struct GenericAgent;
-const Point& Pos(const GenericAgent& agent);
-Point& Pos(GenericAgent& agent);
 
 struct GenericAgent {
     using ID = jps::UniqueID<GenericAgent>;
@@ -30,8 +23,9 @@ struct GenericAgent {
     Point destination{};
     Point target{};
 
-    /// Built-in models store an AgentState; custom models store CustomModelData.
-    using Model = std::variant<AgentState, CustomModelData>;
+    /// Unified per-agent model state. Built-in model agents leave customState empty;
+    /// Python custom model agents store a GilSafePyObject in customState.
+    using Model = AgentState;
     Model model{};
 
     GenericAgent(
@@ -46,36 +40,23 @@ struct GenericAgent {
         , target(pos_)
         , model(std::move(model_))
     {
-        Pos(*this) = pos_;
+        model.position = pos_;
     }
 };
 
 inline const Point& Pos(const GenericAgent& agent)
 {
-    return std::visit(
-        overloaded{
-            [](const AgentState& s) -> const Point& { return s.position; },
-            [](const CustomModelData& d) -> const Point& { return d.position; }},
-        agent.model);
+    return agent.model.position;
 }
 
 inline Point& Pos(GenericAgent& agent)
 {
-    return std::visit(
-        overloaded{
-            [](AgentState& s) -> Point& { return s.position; },
-            [](CustomModelData& d) -> Point& { return d.position; }},
-        agent.model);
+    return agent.model.position;
 }
 
-/// Returns the operational model type of the agent.
 inline OperationalModelType ModelTypeOf(const GenericAgent::Model& model)
 {
-    return std::visit(
-        overloaded{
-            [](const AgentState& s) { return s.type; },
-            [](const CustomModelData&) { return OperationalModelType::CUSTOM_MODEL; }},
-        model);
+    return model.type;
 }
 
 template <class Agent>
@@ -88,20 +69,16 @@ struct fmt::formatter<GenericAgent> {
     template <typename FormatContext>
     auto format(const GenericAgent& agent, FormatContext& ctx) const
     {
-        return std::visit(
-            [&ctx, &agent](const auto& m) {
-                return fmt::format_to(
-                    ctx.out(),
-                    "Agent[id={}, journey={}, stage={}, destination={}, waypoint={}, pos={}, "
-                    "model={})",
-                    agent.id,
-                    agent.journeyId,
-                    agent.stageId,
-                    agent.destination,
-                    agent.target,
-                    Pos(agent),
-                    m);
-            },
+        return fmt::format_to(
+            ctx.out(),
+            "Agent[id={}, journey={}, stage={}, destination={}, waypoint={}, pos={}, "
+            "model={})",
+            agent.id,
+            agent.journeyId,
+            agent.stageId,
+            agent.destination,
+            agent.target,
+            Pos(agent),
             agent.model);
     }
 };
