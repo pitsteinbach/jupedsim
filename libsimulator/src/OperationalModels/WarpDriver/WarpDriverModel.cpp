@@ -379,30 +379,29 @@ void WarpDriverModel::CheckModelConstraint(
 
 void WarpDriverModel::ComputeNext(
     double dT,
-    const GenericAgent& current,
-    GenericAgent& next,
+    const AgentState& current,
+    AgentState& next,
+    const AgentRouting& routing,
     const CollisionGeometry& geometry,
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
-    const auto& state = current.model;
-    const auto& extras = std::get<WarpExtras>(*state.extras);
-    const double speed = state.v0.value_or(Defaults::v0);
-    const double agentRadius = state.radius.value_or(Defaults::radius);
+    const auto& extras = std::get<WarpExtras>(*current.extras);
+    const double speed = current.v0.value_or(Defaults::v0);
+    const double agentRadius = current.radius.value_or(Defaults::radius);
 
-    Point orient = state.orientation.value_or(Point{0.0, 0.0});
+    Point orient = current.orientation.value_or(Point{0.0, 0.0});
     if(orient.Norm() < 1e-9) {
         orient = Point{1.0, 0.0};
     } else {
         orient = orient.Normalized();
     }
 
-    Point toTarget = current.destination - Pos(current);
+    Point toTarget = routing.destination - current.position;
     const double distToTarget = toTarget.Norm();
     if(distToTarget < 1e-9) {
-        auto& nextState = next.model;
-        auto& nextExtras = std::get<WarpExtras>(*nextState.extras);
-        nextState.position = Pos(current);
-        nextState.orientation = orient;
+        auto& nextExtras = std::get<WarpExtras>(*next.extras);
+        next.position = current.position;
+        next.orientation = orient;
         nextExtras.stuckTime = 0.0;
         nextExtras.anchorX = 0.0;
         nextExtras.anchorY = 0.0;
@@ -414,16 +413,16 @@ void WarpDriverModel::ComputeNext(
     Point effectiveOrient = desiredDir;
 
     const double dtSample = extras.timeHorizon / std::max(extras.numSamples - 1, 1);
-    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(Pos(current), _cutOffRadius);
+    const auto neighbors = neighborhoodSearch.GetNeighboringAgents(current.position, _cutOffRadius);
 
     Point repulsion{0.0, 0.0};
     for(const auto& neighbor : neighbors) {
-        if(neighbor.id == current.id) {
+        if(Pos(neighbor) == current.position) {
             continue;
         }
         const auto& nbState = neighbor.model;
         const double nbRadius = nbState.radius.value_or(Defaults::radius);
-        Point diff = Pos(current) - Pos(neighbor);
+        Point diff = current.position - Pos(neighbor);
         const double dist = diff.Norm();
         const double combinedRadius = agentRadius + nbRadius;
         if(dist < combinedRadius * 3.0 && dist > 1e-6) {
@@ -452,7 +451,7 @@ void WarpDriverModel::ComputeNext(
     }
 
     for(const auto& neighbor : neighbors) {
-        if(neighbor.id == current.id) {
+        if(Pos(neighbor) == current.position) {
             continue;
         }
         const auto& nbState = neighbor.model;
@@ -466,7 +465,7 @@ void WarpDriverModel::ComputeNext(
         const double nbRadius = nbState.radius.value_or(Defaults::radius);
 
         WarpParams wp{};
-        wp.posA = Pos(current);
+        wp.posA = current.position;
         wp.orientA = effectiveOrient;
         wp.posB = Pos(neighbor);
         wp.orientB = nbOrient;
@@ -558,17 +557,17 @@ void WarpDriverModel::ComputeNext(
 
     newVelWorld = newVelWorld + repulsion;
 
-    const auto& walls = geometry.LineSegmentsInApproxDistanceTo(Pos(current));
+    const auto& walls = geometry.LineSegmentsInApproxDistanceTo(current.position);
     for(const auto& wall : walls) {
         const Point wallVec = wall.p2 - wall.p1;
         const double wallLen2 = wallVec.ScalarProduct(wallVec);
         if(wallLen2 < 1e-12) {
             continue;
         }
-        const Point toAgent = Pos(current) - wall.p1;
+        const Point toAgent = current.position - wall.p1;
         const double t = std::clamp(toAgent.ScalarProduct(wallVec) / wallLen2, 0.0, 1.0);
         const Point closest = wall.p1 + wallVec * t;
-        const Point diff = Pos(current) - closest;
+        const Point diff = current.position - closest;
         const double dist = diff.Norm();
         if(dist < agentRadius * 3.0 && dist > 1e-6) {
             const double steering = speed * (agentRadius * 3.0 - dist) / dist;
@@ -588,23 +587,22 @@ void WarpDriverModel::ComputeNext(
     double detourTime = extras.detourTime;
     int detourSide = extras.detourSide;
 
-    auto& nextState = next.model;
-    auto& nextExtras = std::get<WarpExtras>(*nextState.extras);
+    auto& nextExtras = std::get<WarpExtras>(*next.extras);
 
     if(detourTime > 0.0) {
         detourTime -= dT;
         Point lateral{-desiredDir.y * detourSide, desiredDir.x * detourSide};
         Point detourDir = (lateral * 0.8 + desiredDir * 0.2).Normalized();
         Point detourVel = detourDir * speed * 0.5;
-        Point newPos = Pos(current) + detourVel * dT;
+        Point newPos = current.position + detourVel * dT;
         if(!geometry.InsideGeometry(newPos)) {
             detourSide = -detourSide;
             lateral = Point{-desiredDir.y * detourSide, desiredDir.x * detourSide};
             detourDir = (lateral * 0.8 + desiredDir * 0.2).Normalized();
             detourVel = detourDir * speed * 0.5;
-            newPos = Pos(current) + detourVel * dT;
+            newPos = current.position + detourVel * dT;
             if(!geometry.InsideGeometry(newPos)) {
-                newPos = Pos(current) + desiredDir * speed * 0.1 * dT;
+                newPos = current.position + desiredDir * speed * 0.1 * dT;
                 detourDir = desiredDir;
             }
         }
@@ -614,8 +612,8 @@ void WarpDriverModel::ComputeNext(
             anchorX = newPos.x;
             anchorY = newPos.y;
         }
-        nextState.position = newPos;
-        nextState.orientation = detourDir;
+        next.position = newPos;
+        next.orientation = detourDir;
         nextExtras.stuckTime = stuckTime;
         nextExtras.anchorX = anchorX;
         nextExtras.anchorY = anchorY;
@@ -629,12 +627,12 @@ void WarpDriverModel::ComputeNext(
     constexpr double progressRadius = 0.3;
 
     stuckTime += dT;
-    const double netDisplacement = std::hypot(Pos(current).x - anchorX, Pos(current).y - anchorY);
+    const double netDisplacement = std::hypot(current.position.x - anchorX, current.position.y - anchorY);
 
     if(netDisplacement > progressRadius) {
         stuckTime = 0.0;
-        anchorX = Pos(current).x;
-        anchorY = Pos(current).y;
+        anchorX = current.position.x;
+        anchorY = current.position.y;
     } else if(stuckTime >= stuckThreshold) {
         std::uniform_int_distribution<int> sideDist(0, 1);
         detourSide = sideDist(_rng) * 2 - 1;
@@ -649,11 +647,11 @@ void WarpDriverModel::ComputeNext(
         smoothedVel = smoothedVel * (speed / smoothedSpeed);
     }
 
-    Point newPos = Pos(current) + smoothedVel * dT;
+    Point newPos = current.position + smoothedVel * dT;
     Point newOrient = (smoothedVel.Norm() > 1e-9) ? smoothedVel.Normalized() : orient;
 
-    nextState.position = newPos;
-    nextState.orientation = newOrient;
+    next.position = newPos;
+    next.orientation = newOrient;
     nextExtras.stuckTime = stuckTime;
     nextExtras.anchorX = anchorX;
     nextExtras.anchorY = anchorY;

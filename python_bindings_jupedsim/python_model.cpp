@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "python_model.hpp"
 
+#include "AgentRouting.hpp"
 #include "AgentState.hpp"
 #include "CollisionGeometry.hpp"
 #include "GenericAgent.hpp"
@@ -89,26 +90,28 @@ PythonModel::PythonModel(py::object model) : _model(std::move(model))
 
 void PythonModel::ComputeNext(
     double dT,
-    const GenericAgent& current,
-    GenericAgent& next,
+    const AgentState& current,
+    AgentState& next,
+    const AgentRouting& routing,
     const CollisionGeometry& geometry,
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
     py::gil_scoped_acquire gil;
 
-    py::object pythonAgent = py::cast(current);
+    py::object currentPyState =
+        std::get<CustomModelState>(*current.extras).Get<GilSafePyObject>().Get();
+
     py::object pythonGeometry = py::cast(&geometry, py::return_value_policy::reference);
     py::object pythonNeighborhoodSearch = py::cast(
         const_cast<NeighborhoodSearch<GenericAgent>*>(&neighborhoodSearch),
         py::return_value_policy::reference);
 
     py::object pythonUpdate = _model.attr("_compute_next")(
-        dT, pythonAgent, pythonGeometry, pythonNeighborhoodSearch);
+        dT, currentPyState, routing, pythonGeometry, pythonNeighborhoodSearch);
 
     // "next" shares the Python state object with "current" (GilSafePyObject copies are
     // refcounted, not cloned), so this also rejects returning the current state instance.
-    auto& nextState = next.model;
-    auto& customState = std::get<CustomModelState>(*nextState.extras).Get<GilSafePyObject>();
+    auto& customState = std::get<CustomModelState>(*next.extras).Get<GilSafePyObject>();
     if(pythonUpdate.is(customState.Get())) {
         throw SimulationError(
             "Current and updated model state are the same instance. "
@@ -129,7 +132,7 @@ void PythonModel::ComputeNext(
     }
 
     try {
-        nextState.position = intoPoint(py::cast<std::tuple<double, double>>(attr));
+        next.position = intoPoint(py::cast<std::tuple<double, double>>(attr));
     } catch(const py::cast_error&) {
         std::string actualType = "<unknown>";
         std::string valueRepr = "<unprintable>";
@@ -154,13 +157,13 @@ void PythonModel::ComputeNext(
     // with Python custom model agents as proper neighbors.
     if(py::hasattr(pythonUpdate, "radius")) {
         try {
-            nextState.radius = py::cast<double>(pythonUpdate.attr("radius"));
+            next.radius = py::cast<double>(pythonUpdate.attr("radius"));
         } catch(const py::cast_error&) {
         }
     }
     if(py::hasattr(pythonUpdate, "velocity")) {
         try {
-            nextState.velocity =
+            next.velocity =
                 intoPoint(py::cast<std::tuple<double, double>>(pythonUpdate.attr("velocity")));
         } catch(const py::cast_error&) {
         }
@@ -209,9 +212,9 @@ void init_python_model(py::module_& m)
            GenericAgent prototype,
            const CollisionGeometry& geometry,
            const NeighborhoodSearch<GenericAgent>& ns) -> AgentState {
-            prototype.destination = prototype.target;
+            prototype.routing.destination = prototype.routing.target;
             GenericAgent next = prototype;
-            model.ComputeNext(dt, prototype, next, geometry, ns);
+            model.ComputeNext(dt, prototype.model, next.model, prototype.routing, geometry, ns);
             return next.model;
         },
         py::arg("model"),

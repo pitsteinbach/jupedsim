@@ -39,7 +39,7 @@ public:
         _next.clear();
         std::copy(std::begin(agents), std::end(agents), std::back_inserter(_next));
         for(size_t index = 0; index < agents.size(); ++index) {
-            _model->ComputeNext(dT, agents[index], _next[index], geometry, neighborhoodSearch);
+            _model->ComputeNext(dT, agents[index].model, _next[index].model, agents[index].routing, geometry, neighborhoodSearch);
         }
         // Swap in the computed generation. This is safe because no caller retains
         // pointers/references across an iteration (Python-side agent handles resolve per

@@ -26,8 +26,21 @@ the model as keyword-only constructor arguments with sensible defaults:
 ``strength_geometry_repulsion`` and ``range_geometry_repulsion``.
 """
 
+# SPDX-License-Identifier: LGPL-3.0-or-later
 import jupedsim.native as py_jps
 
 CollisionFreeSpeedModelState = py_jps.CollisionFreeSpeedModelState
 
-__all__ = ["CollisionFreeSpeedModelState"]
+
+class CollisionFreeSpeedModel:
+    def __init__(self) -> None:
+        self._native = py_jps.CollisionFreeSpeedModel()
+
+    def compute_next(self, dt, state, routing, geometry, neighborhood_search):
+        return self._native._compute_next_state(
+            dt,
+            state,
+            routing,
+            geometry._obj,
+            neighborhood_search._obj,
+        )

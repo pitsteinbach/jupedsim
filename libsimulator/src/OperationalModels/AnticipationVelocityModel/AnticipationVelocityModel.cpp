@@ -54,23 +54,24 @@ OperationalModelType AnticipationVelocityModel::Type() const
 
 void AnticipationVelocityModel::ComputeNext(
     double dT,
-    const GenericAgent& current,
-    GenericAgent& next,
+    const AgentState& current,
+    AgentState& next,
+    const AgentRouting& routing,
     const CollisionGeometry& geometry,
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
-    auto neighborhood = neighborhoodSearch.GetNeighboringAgents(Pos(current), _cutOffRadius);
-    const auto& boundary = geometry.LineSegmentsInApproxDistanceTo(Pos(current));
+    auto neighborhood = neighborhoodSearch.GetNeighboringAgents(current.position, _cutOffRadius);
+    const auto& boundary = geometry.LineSegmentsInApproxDistanceTo(current.position);
 
     neighborhood.erase(
         std::remove_if(
             std::begin(neighborhood),
             std::end(neighborhood),
             [&current, &boundary](const auto& neighbor) {
-                if(current.id == neighbor.id) {
+                if(Pos(neighbor) == current.position) {
                     return true;
                 }
-                const auto agent_to_neighbor = LineSegment(Pos(current), Pos(neighbor));
+                const auto agent_to_neighbor = LineSegment(current.position, Pos(neighbor));
                 return std::find_if(
                            boundary.cbegin(),
                            boundary.cend(),
@@ -84,55 +85,52 @@ void AnticipationVelocityModel::ComputeNext(
         std::begin(neighborhood),
         std::end(neighborhood),
         Point{},
-        [&current, this](const auto& res, const auto& neighbor) {
-            return res + NeighborRepulsion(current, neighbor);
+        [&current, &routing, this](const auto& res, const auto& neighbor) {
+            return res + NeighborRepulsion(current, neighbor.model, routing);
         });
 
-    const auto& state = current.model;
-    const auto& extras = std::get<AVMExtras>(*state.extras);
+    const auto& extras = std::get<AVMExtras>(*current.extras);
 
-    const auto desiredDirection = (current.destination - Pos(current)).Normalized();
+    const auto desiredDirection = (routing.destination - current.position).Normalized();
     auto direction = (desiredDirection + neighborRepulsion).Normalized();
     if(direction == Point{}) {
-        direction = state.orientation.value_or(Point{0.0, 0.0});
+        direction = current.orientation.value_or(Point{0.0, 0.0});
     }
 
-    direction = UpdateDirection(current, direction, dT);
+    direction = UpdateDirection(current, direction, dT, routing);
     const auto spacing = std::accumulate(
         std::begin(neighborhood),
         std::end(neighborhood),
         std::numeric_limits<double>::max(),
         [&current, &direction, this](const auto& res, const auto& neighbor) {
-            return std::min(res, GetSpacing(current, neighbor, direction));
+            return std::min(res, GetSpacing(current, neighbor.model, direction));
         });
 
     const auto optimal_speed =
-        OptimalSpeed(current, spacing, state.timeGap.value_or(Defaults::timeGap));
+        OptimalSpeed(current, spacing, current.timeGap.value_or(Defaults::timeGap));
     direction = HandleWallAvoidance(
         direction,
-        Pos(current),
-        state.radius.value_or(Defaults::radius),
+        current.position,
+        current.radius.value_or(Defaults::radius),
         boundary,
         extras.wallBufferDistance,
         extras.pushoutStrength);
 
     const auto velocity = direction * optimal_speed;
-    auto& nextState = next.model;
-    nextState.position = Pos(current) + velocity * dT;
-    nextState.orientation = direction;
-    nextState.velocity = velocity;
+    next.position = current.position + velocity * dT;
+    next.orientation = direction;
+    next.velocity = velocity;
 }
 
 Point AnticipationVelocityModel::UpdateDirection(
-    const GenericAgent& ped,
+    const AgentState& ped,
     const Point& calculatedDirection,
-    double dt) const
+    double dt,
+    const AgentRouting& routing) const
 {
-    const auto& state = ped.model;
-    // const auto& extras = std::get<AVMExtras>(*state.extras);
-    const auto reactionTime = state.reactionTime.value_or(Defaults::reactionTime);
-    const Point desiredDirection = (ped.destination - Pos(ped)).Normalized();
-    const Point actualDirection = state.orientation.value_or(Point{0.0, 0.0});
+    const auto reactionTime = ped.reactionTime.value_or(Defaults::reactionTime);
+    const Point desiredDirection = (routing.destination - ped.position).Normalized();
+    const Point actualDirection = ped.orientation.value_or(Point{0.0, 0.0});
     Point updatedDirection;
 
     if(desiredDirection.ScalarProduct(calculatedDirection) *
@@ -204,35 +202,32 @@ void AnticipationVelocityModel::CheckModelConstraint(
 }
 
 double AnticipationVelocityModel::OptimalSpeed(
-    const GenericAgent& ped,
+    const AgentState& ped,
     double spacing,
     double time_gap) const
 {
-    const auto& state = ped.model;
     constexpr double creep_speed = 0.01;
     double speed = spacing / time_gap;
     if(std::abs(speed) < creep_speed) {
         const auto r = gen() % 3;
         speed = (r == 0) ? creep_speed : (r == 1) ? -creep_speed : 0.0;
     }
-    return std::min(std::max(speed, -creep_speed), state.v0.value_or(Defaults::v0));
+    return std::min(std::max(speed, -creep_speed), ped.v0.value_or(Defaults::v0));
 }
 
 double AnticipationVelocityModel::GetSpacing(
-    const GenericAgent& ped1,
-    const GenericAgent& ped2,
+    const AgentState& ped1,
+    const AgentState& ped2,
     const Point& direction) const
 {
-    const auto& s1 = ped1.model;
-    const auto& s2 = ped2.model;
-    const auto distp12 = Pos(ped2) - Pos(ped1);
+    const auto distp12 = ped2.position - ped1.position;
     if(direction.ScalarProduct(distp12) < 0) {
         return std::numeric_limits<double>::max();
     }
     const auto left = direction.Rotate90Deg();
     constexpr double buffer = 0.02;
     const auto l =
-        s1.radius.value_or(Defaults::radius) + s2.radius.value_or(Defaults::radius) + buffer;
+        ped1.radius.value_or(Defaults::radius) + ped2.radius.value_or(Defaults::radius) + buffer;
     if(std::abs(left.ScalarProduct(distp12)) > l) {
         return std::numeric_limits<double>::max();
     }
@@ -257,27 +252,26 @@ Point AnticipationVelocityModel::CalculateInfluenceDirection(
 }
 
 Point AnticipationVelocityModel::NeighborRepulsion(
-    const GenericAgent& ped1,
-    const GenericAgent& ped2) const
+    const AgentState& ped1,
+    const AgentState& ped2,
+    const AgentRouting& routing1) const
 {
-    const auto& s1 = ped1.model;
-    const auto& s2 = ped2.model;
-    const auto* e1 = s1.extras ? std::get_if<AVMExtras>(&*s1.extras) : nullptr;
-    const auto* e2 = s2.extras ? std::get_if<AVMExtras>(&*s2.extras) : nullptr;
+    const auto* e1 = ped1.extras ? std::get_if<AVMExtras>(&*ped1.extras) : nullptr;
+    const auto* e2 = ped2.extras ? std::get_if<AVMExtras>(&*ped2.extras) : nullptr;
     if(!e1 || !e2) {
         return Point{};
     }
 
-    const auto distp12 = Pos(ped2) - Pos(ped1);
+    const auto distp12 = ped2.position - ped1.position;
     const auto [distance, ep12] = distp12.NormAndNormalized();
     const double adjustedDist =
-        distance - (s1.radius.value_or(Defaults::radius) + s2.radius.value_or(Defaults::radius));
+        distance - (ped1.radius.value_or(Defaults::radius) + ped2.radius.value_or(Defaults::radius));
 
-    const auto& orientation1 = s1.orientation.value_or(Point{0.0, 0.0});
-    const auto& d1 = (ped1.destination - Pos(ped1)).Normalized();
-    const auto& orientation2 = s2.orientation.value_or(Point{0.0, 0.0});
-    const auto& velocity1 = s1.velocity.value_or(Point{0.0, 0.0});
-    const auto& velocity2 = s2.velocity.value_or(Point{0.0, 0.0});
+    const auto& orientation1 = ped1.orientation.value_or(Point{0.0, 0.0});
+    const auto& d1 = (routing1.destination - ped1.position).Normalized();
+    const auto& orientation2 = ped2.orientation.value_or(Point{0.0, 0.0});
+    const auto& velocity1 = ped1.velocity.value_or(Point{0.0, 0.0});
+    const auto& velocity2 = ped2.velocity.value_or(Point{0.0, 0.0});
 
     const auto inPerceptionRange =
         d1.ScalarProduct(ep12) >= 0 || orientation1.ScalarProduct(ep12) >= 0;
@@ -293,8 +287,8 @@ Point AnticipationVelocityModel::NeighborRepulsion(
     const double alignmentFactor =
         alignmentBase + alignmentWeight * (1.0 - d1.ScalarProduct(orientation2));
     const auto strengthN =
-        s1.strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion);
-    const auto rangeN = s1.rangeNeighborRepulsion.value_or(Defaults::rangeNeighborRepulsion);
+        ped1.strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion);
+    const auto rangeN = ped1.rangeNeighborRepulsion.value_or(Defaults::rangeNeighborRepulsion);
     const double interactionStrength = strengthN * alignmentFactor * std::exp(-R_dist / rangeN);
     const auto newep12 = distp12 + velocity2 * e2->anticipationTime;
 

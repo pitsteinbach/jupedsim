@@ -28,7 +28,7 @@ void init_collision_free_speed_model_v2(py::module_& m)
                GenericAgent& next,
                const CollisionGeometry& geometry,
                const NeighborhoodSearch<GenericAgent>& ns) {
-                self.ComputeNext(dt, current, next, geometry, ns);
+                self.ComputeNext(dt, current.model, next.model, current.routing, geometry, ns);
             },
             py::arg("dt"),
             py::arg("current"),

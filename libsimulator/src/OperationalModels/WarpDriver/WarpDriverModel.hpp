@@ -65,8 +65,9 @@ public:
 
     void ComputeNext(
         double dT,
-        const GenericAgent& current,
-        GenericAgent& next,
+        const AgentState& current,
+        AgentState& next,
+        const AgentRouting& routing,
         const CollisionGeometry& geometry,
         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const override;
 

@@ -41,8 +41,9 @@ public:
     OperationalModelType Type() const override;
     void ComputeNext(
         double dT,
-        const GenericAgent& current,
-        GenericAgent& next,
+        const AgentState& current,
+        AgentState& next,
+        const AgentRouting& routing,
         const CollisionGeometry& geometry,
         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const override;
     void CheckModelConstraint(
@@ -52,16 +53,16 @@ public:
 
 private:
     Point ForceDriv(
-        const GenericAgent& ped,
+        const AgentState& ped,
         Point target,
         double mass,
         double tau,
         double deltaT,
         Point& e0update) const;
-    Point ForceRepPed(const GenericAgent& ped1, const GenericAgent& ped2) const;
-    Point ForceRepRoom(const GenericAgent& ped, const CollisionGeometry& geometry) const;
-    Point ForceRepWall(const GenericAgent& ped, const LineSegment& l) const;
-    Point ForceRepStatPoint(const GenericAgent& ped, const Point& p, double l, double vn) const;
+    Point ForceRepPed(const AgentState& ped1, const GenericAgent& ped2) const;
+    Point ForceRepRoom(const AgentState& ped, const CollisionGeometry& geometry) const;
+    Point ForceRepWall(const AgentState& ped, const LineSegment& l) const;
+    Point ForceRepStatPoint(const AgentState& ped, const Point& p, double l, double vn) const;
     Point ForceInterpolation(
         const AgentState& state,
         double v0,
@@ -72,4 +73,5 @@ private:
         double r,
         double l) const;
     double AgentToAgentSpacing(const GenericAgent& agent, const GenericAgent& otherAgent) const;
+    double AgentToAgentSpacingFromState(const AgentState& agent1, const GenericAgent& agent2) const;
 };

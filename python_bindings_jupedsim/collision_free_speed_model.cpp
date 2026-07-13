@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
+#include "AgentRouting.hpp"
 #include "AgentState.hpp"
 #include "CollisionGeometry.hpp"
 #include "GenericAgent.hpp"
@@ -28,11 +29,28 @@ void init_collision_free_speed_model(py::module_& m)
                GenericAgent& next,
                const CollisionGeometry& geometry,
                const NeighborhoodSearch<GenericAgent>& ns) {
-                self.ComputeNext(dt, current, next, geometry, ns);
+                self.ComputeNext(dt, current.model, next.model, current.routing, geometry, ns);
             },
             py::arg("dt"),
             py::arg("current"),
             py::arg("next"),
+            py::arg("geometry"),
+            py::arg("neighborhood_search"))
+        .def(
+            "_compute_next_state",
+            [](const CollisionFreeSpeedModel& self,
+               double dt,
+               const AgentState& current,
+               const AgentRouting& routing,
+               const CollisionGeometry& geometry,
+               const NeighborhoodSearch<GenericAgent>& ns) -> AgentState {
+                AgentState next = current;
+                self.ComputeNext(dt, current, next, routing, geometry, ns);
+                return next;
+            },
+            py::arg("dt"),
+            py::arg("current"),
+            py::arg("routing"),
             py::arg("geometry"),
             py::arg("neighborhood_search"))
         .def(

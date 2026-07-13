@@ -35,8 +35,9 @@ public:
     OperationalModelType Type() const override;
     void ComputeNext(
         double dT,
-        const GenericAgent& current,
-        GenericAgent& next,
+        const AgentState& current,
+        AgentState& next,
+        const AgentRouting& routing,
         const CollisionGeometry& geometry,
         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const override;
     void CheckModelConstraint(
@@ -45,9 +46,9 @@ public:
         const CollisionGeometry& geometry) const override;
 
 private:
-    static Point DrivingForce(const GenericAgent& agent);
-    Point AgentForce(const GenericAgent& ped1, const GenericAgent& ped2) const;
-    Point ObstacleForce(const GenericAgent& agent, const LineSegment& segment) const;
+    static Point DrivingForce(const AgentState& agent, const Point& destination);
+    Point AgentForce(const AgentState& ped1, const GenericAgent& ped2) const;
+    Point ObstacleForce(const AgentState& agent, const LineSegment& segment) const;
     static Point ForceBetweenPoints(
         const Point pt1,
         const Point pt2,

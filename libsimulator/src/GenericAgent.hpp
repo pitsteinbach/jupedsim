@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
+#include "AgentRouting.hpp"
 #include "AgentState.hpp"
 #include "OperationalModels/OperationalModelType.hpp"
 #include "Point.hpp"
@@ -20,8 +21,7 @@ struct GenericAgent {
     jps::UniqueID<Journey> journeyId{jps::UniqueID<Journey>::Invalid};
     jps::UniqueID<BaseStage> stageId{jps::UniqueID<BaseStage>::Invalid};
 
-    Point destination{};
-    Point target{};
+    AgentRouting routing{};
 
     /// Unified per-agent model state. Built-in model agents leave customState empty;
     /// Python custom model agents store a GilSafePyObject in customState.
@@ -37,7 +37,7 @@ struct GenericAgent {
         : id(id_ != ID::Invalid ? id_ : ID{})
         , journeyId(journeyId_)
         , stageId(stageId_)
-        , target(pos_)
+        , routing{{}, pos_}
         , model(std::move(model_))
     {
         model.position = pos_;
@@ -76,8 +76,8 @@ struct fmt::formatter<GenericAgent> {
             agent.id,
             agent.journeyId,
             agent.stageId,
-            agent.destination,
-            agent.target,
+            agent.routing.destination,
+            agent.routing.target,
             Pos(agent),
             agent.model);
     }

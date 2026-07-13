@@ -32,8 +32,9 @@ public:
     OperationalModelType Type() const override;
     void ComputeNext(
         double dT,
-        const GenericAgent& current,
-        GenericAgent& next,
+        const AgentState& current,
+        AgentState& next,
+        const AgentRouting& routing,
         const CollisionGeometry& geometry,
         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const override;
     void CheckModelConstraint(
@@ -42,9 +43,9 @@ public:
         const CollisionGeometry& geometry) const override;
 
 private:
-    double OptimalSpeed(const GenericAgent& ped, double spacing, double time_gap) const;
+    double OptimalSpeed(const AgentState& ped, double spacing, double time_gap) const;
     double
-    GetSpacing(const GenericAgent& ped1, const GenericAgent& ped2, const Point& direction) const;
-    Point NeighborRepulsion(const GenericAgent& ped1, const GenericAgent& ped2) const;
-    Point BoundaryRepulsion(const GenericAgent& ped, const LineSegment& boundary_segment) const;
+    GetSpacing(const AgentState& ped1, const AgentState& ped2, const Point& direction) const;
+    Point NeighborRepulsion(const AgentState& ped1, const AgentState& ped2) const;
+    Point BoundaryRepulsion(const AgentState& ped, const LineSegment& boundary_segment) const;
 };

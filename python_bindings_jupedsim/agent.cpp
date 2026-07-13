@@ -29,9 +29,9 @@ void init_agent(py::module_& m)
             "position", [](const GenericAgent& agent) { return intoTuple(Pos(agent)); })
         .def_property(
             "target",
-            [](const GenericAgent& agent) { return intoTuple(agent.target); },
+            [](const GenericAgent& agent) { return intoTuple(agent.routing.target); },
             [](GenericAgent& agent, std::tuple<double, double> target) {
-                agent.target = intoPoint(target);
+                agent.routing.target = intoPoint(target);
             })
         .def_property_readonly(
             "model",

@@ -1,5 +1,6 @@
 add_library(py_jupedsim MODULE
     agent.cpp
+    agent_routing.cpp
     agent_state.cpp
     anticipation_velocity_model.cpp
     bindings_jupedsim.cpp

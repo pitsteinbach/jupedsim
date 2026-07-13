@@ -77,11 +77,16 @@ class CustomOperationalModel(ABC):
     def compute_next(
         self,
         dt: float,
-        ped: _TransientAgent,
+        state: CustomModelAgentState,
+        routing,
         geometry: Geometry,
         neighborhood_search: NeighborhoodSearch,
     ) -> CustomModelAgentState:
-        """Compute one update for ``ped``."""
+        """Compute one update step.
+
+        ``state`` is the current per-agent Python state object.
+        ``routing`` exposes ``destination`` and ``target`` (tuples).
+        """
 
     def check_model_constraint(
         self,
@@ -95,17 +100,18 @@ class CustomOperationalModel(ABC):
     def _compute_next(
         self,
         dt,
-        ped,
+        state,
+        routing,
         geometry,
         neighborhood_search,
     ) -> CustomModelAgentState:
-        from jupedsim.agent import _TransientAgent
         from jupedsim.geometry import Geometry
         from jupedsim.neighborhood import NeighborhoodSearch
 
         return self.compute_next(
             dt,
-            _TransientAgent(ped),
+            state,
+            routing,
             Geometry(geometry),
             NeighborhoodSearch(neighborhood_search),
         )

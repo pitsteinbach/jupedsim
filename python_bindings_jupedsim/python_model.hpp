@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
+#include "AgentRouting.hpp"
+#include "AgentState.hpp"
 #include "OperationalModels/CustomModel/CustomModel.hpp"
 
 #include <pybind11/pybind11.h>
@@ -45,8 +47,9 @@ public:
 
     void ComputeNext(
         double dT,
-        const GenericAgent& current,
-        GenericAgent& next,
+        const AgentState& current,
+        AgentState& next,
+        const AgentRouting& routing,
         const CollisionGeometry& geometry,
         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const override;
 

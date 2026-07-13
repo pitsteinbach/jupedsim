@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
+#include "AgentRouting.hpp"
+#include "AgentState.hpp"
 #include "CollisionGeometry.hpp"
 #include "OperationalModelType.hpp"
 #include "SimulationError.hpp"
@@ -62,8 +64,9 @@ public:
     /// i.e. via "current" and the neighborhood search, never via "next".
     virtual void ComputeNext(
         double dT,
-        const GenericAgent& current,
-        GenericAgent& next,
+        const AgentState& current,
+        AgentState& next,
+        const AgentRouting& routing,
         const CollisionGeometry& geometry,
         const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const = 0;
 

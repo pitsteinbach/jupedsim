@@ -30,7 +30,7 @@ void init_anticipation_velocity_model(py::module_& m)
                GenericAgent& next,
                const CollisionGeometry& geometry,
                const NeighborhoodSearch<GenericAgent>& ns) {
-                self.ComputeNext(dt, current, next, geometry, ns);
+                self.ComputeNext(dt, current.model, next.model, current.routing, geometry, ns);
             },
             py::arg("dt"),
             py::arg("current"),

@@ -53,16 +53,17 @@ OperationalModelType GeneralizedCentrifugalForceModel::Type() const
 
 void GeneralizedCentrifugalForceModel::ComputeNext(
     double dT,
-    const GenericAgent& current,
-    GenericAgent& next,
+    const AgentState& current,
+    AgentState& next,
+    const AgentRouting& routing,
     const CollisionGeometry& geometry,
     const NeighborhoodSearch<GenericAgent>& neighborhoodSearch) const
 {
-    const auto neighborhood = neighborhoodSearch.GetNeighboringAgents(Pos(current), _cutOffRadius);
-    const auto p1 = Pos(current);
+    const auto neighborhood = neighborhoodSearch.GetNeighboringAgents(current.position, _cutOffRadius);
+    const auto p1 = current.position;
     Point F_rep;
     for(const auto& neighbor : neighborhood) {
-        if(neighbor.id == current.id) {
+        if(Pos(neighbor) == current.position) {
             continue;
         }
         if(!geometry.IntersectsAny(LineSegment(p1, Pos(neighbor)))) {
@@ -74,25 +75,23 @@ void GeneralizedCentrifugalForceModel::ComputeNext(
     std::optional<Point> position{};
     std::optional<Point> velocity{};
     Point repwall = ForceRepRoom(current, geometry);
-    const auto& state = current.model;
-    const auto& extras = std::get<GCFMExtras>(*state.extras);
-    const auto mass = state.mass.value_or(Defaults::mass);
-    const auto tau = state.reactionTime.value_or(Defaults::reactionTime);
-    Point fd = ForceDriv(current, current.destination, mass, tau, dT, e0);
+    const auto& extras = std::get<GCFMExtras>(*current.extras);
+    const auto mass = current.mass.value_or(Defaults::mass);
+    const auto tau = current.reactionTime.value_or(Defaults::reactionTime);
+    Point fd = ForceDriv(current, routing.destination, mass, tau, dT, e0);
     Point acc = (fd + F_rep + repwall) / mass;
 
-    velocity = (state.orientation.value_or(Point{1.0, 0.0}) * extras.speed) + acc * dT;
-    position = Pos(current) + *velocity * dT;
+    velocity = (current.orientation.value_or(Point{1.0, 0.0}) * extras.speed) + acc * dT;
+    position = current.position + *velocity * dT;
 
-    auto& nextState = next.model;
-    auto& nextExtras = std::get<GCFMExtras>(*nextState.extras);
+    auto& nextExtras = std::get<GCFMExtras>(*next.extras);
     nextExtras.e0 = e0;
     ++nextExtras.orientationDelay;
     if(position) {
-        nextState.position = *position;
+        next.position = *position;
     }
     if(velocity) {
-        nextState.orientation = (*velocity).Normalized();
+        next.orientation = (*velocity).Normalized();
         nextExtras.speed = (*velocity).Norm();
     }
 }
@@ -149,7 +148,7 @@ void GeneralizedCentrifugalForceModel::CheckModelConstraint(
 }
 
 Point GeneralizedCentrifugalForceModel::ForceDriv(
-    const GenericAgent& ped,
+    const AgentState& ped,
     Point target,
     double mass,
     double tau,
@@ -157,13 +156,11 @@ Point GeneralizedCentrifugalForceModel::ForceDriv(
     Point& e0update) const
 {
     Point F_driv;
-    const auto pos = Pos(ped);
-    const auto dest = ped.destination;
-    const auto dist = (dest - pos).Norm();
-    const auto& state = ped.model;
-    const auto& extras = std::get<GCFMExtras>(*state.extras);
-    const auto orientation = state.orientation.value_or(Point{1.0, 0.0});
-    const auto v0 = state.v0.value_or(Defaults::v0);
+    const auto pos = ped.position;
+    const auto dist = (target - pos).Norm();
+    const auto& extras = std::get<GCFMExtras>(*ped.extras);
+    const auto orientation = ped.orientation.value_or(Point{1.0, 0.0});
+    const auto v0 = ped.v0.value_or(Defaults::v0);
     if(dist > J_EPS_GOAL) {
         const Point e0 = mollify_e0(target, pos, deltaT, extras.orientationDelay, extras.e0);
         e0update = e0;
@@ -176,21 +173,20 @@ Point GeneralizedCentrifugalForceModel::ForceDriv(
 }
 
 Point GeneralizedCentrifugalForceModel::ForceRepPed(
-    const GenericAgent& ped1,
-    const GenericAgent& ped2) const
+    const AgentState& ped1,
+    const GenericAgent& ped2agent) const
 {
-    const auto& s1 = ped1.model;
-    const auto& s2 = ped2.model;
-    const auto& e1 = std::get<GCFMExtras>(*s1.extras);
+    const auto& s2 = ped2agent.model;
+    const auto& e1 = std::get<GCFMExtras>(*ped1.extras);
     const auto& e2 = std::get<GCFMExtras>(*s2.extras);
-    const auto orientation1 = s1.orientation.value_or(Point{1.0, 0.0});
+    const auto orientation1 = ped1.orientation.value_or(Point{1.0, 0.0});
     const auto orientation2 = s2.orientation.value_or(Point{1.0, 0.0});
-    const auto v0_1 = s1.v0.value_or(Defaults::v0);
-    const auto strengthN = s1.strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion);
-    const auto agent1_mass = s1.mass.value_or(Defaults::mass);
+    const auto v0_1 = ped1.v0.value_or(Defaults::v0);
+    const auto strengthN = ped1.strengthNeighborRepulsion.value_or(Defaults::strengthNeighborRepulsion);
+    const auto agent1_mass = ped1.mass.value_or(Defaults::mass);
 
     Point F_rep;
-    Point distp12 = Pos(ped2) - Pos(ped1);
+    Point distp12 = Pos(ped2agent) - ped1.position;
     const Point vp1 = orientation1 * e1.speed;
     const Point vp2 = orientation2 * e2.speed;
     Point ep12;
@@ -199,7 +195,7 @@ Point GeneralizedCentrifugalForceModel::ForceRepPed(
     double K_ij;
     double nom;
     double px;
-    const auto dist_eff = AgentToAgentSpacing(ped1, ped2);
+    const auto dist_eff = AgentToAgentSpacingFromState(ped1, ped2agent);
 
     if(dist_eff >= e1.maxNeighborInteractionDistance) {
         return Point(0.0, 0.0);
@@ -264,9 +260,9 @@ Point GeneralizedCentrifugalForceModel::ForceRepPed(
     }
     if(F_rep.x != F_rep.x || F_rep.y != F_rep.y) {
         LOG_ERROR(
-            "NAN return p1{} p2 {} Frepx={:f} Frepy={:f} K_ij={:f}",
-            ped1.id,
-            ped2.id,
+            "NAN return p1 pos={} p2 pos={} Frepx={:f} Frepy={:f} K_ij={:f}",
+            ped1.position,
+            Pos(ped2agent),
             F_rep.x,
             F_rep.y,
             K_ij);
@@ -275,10 +271,10 @@ Point GeneralizedCentrifugalForceModel::ForceRepPed(
 }
 
 inline Point GeneralizedCentrifugalForceModel::ForceRepRoom(
-    const GenericAgent& ped,
+    const AgentState& ped,
     const CollisionGeometry& geometry) const
 {
-    const auto& walls = geometry.LineSegmentsInApproxDistanceTo(Pos(ped));
+    const auto& walls = geometry.LineSegmentsInApproxDistanceTo(ped.position);
     return std::accumulate(
         walls.cbegin(),
         walls.cend(),
@@ -289,41 +285,39 @@ inline Point GeneralizedCentrifugalForceModel::ForceRepRoom(
 }
 
 inline Point GeneralizedCentrifugalForceModel::ForceRepWall(
-    const GenericAgent& ped,
+    const AgentState& ped,
     const LineSegment& w) const
 {
     Point F = Point(0.0, 0.0);
-    Point pt = w.ShortestPoint(Pos(ped));
+    Point pt = w.ShortestPoint(ped.position);
     double wlen = w.LengthSquare();
 
     if(wlen < 0.01) {
         return F;
     }
-    if(fabs((w.p1 - w.p2).ScalarProduct(Pos(ped) - pt)) > J_EPS) {
+    if(fabs((w.p1 - w.p2).ScalarProduct(ped.position - pt)) > J_EPS) {
         return F;
     }
     double mind = 0.5;
-    const auto& state = ped.model;
-    const auto& extras = std::get<GCFMExtras>(*state.extras);
-    const auto orientation = state.orientation.value_or(Point{1.0, 0.0});
+    const auto& extras = std::get<GCFMExtras>(*ped.extras);
+    const auto orientation = ped.orientation.value_or(Point{1.0, 0.0});
     double vn = w.NormalComp(orientation * extras.speed);
     F = ForceRepStatPoint(ped, pt, mind, vn);
     return F;
 }
 
 Point GeneralizedCentrifugalForceModel::ForceRepStatPoint(
-    const GenericAgent& ped,
+    const AgentState& ped,
     const Point& p,
     double l,
     double vn) const
 {
     Point F_rep = Point(0.0, 0.0);
-    const auto& state = ped.model;
-    const auto& extras = std::get<GCFMExtras>(*state.extras);
-    const auto orientation = state.orientation.value_or(Point{1.0, 0.0});
-    const auto v0 = state.v0.value_or(Defaults::v0);
+    const auto& extras = std::get<GCFMExtras>(*ped.extras);
+    const auto orientation = ped.orientation.value_or(Point{1.0, 0.0});
+    const auto v0 = ped.v0.value_or(Defaults::v0);
     const Point v = orientation * extras.speed;
-    Point dist = p - Pos(ped);
+    Point dist = p - ped.position;
     double d = dist.Norm();
     Point e_ij;
 
@@ -347,9 +341,9 @@ Point GeneralizedCentrifugalForceModel::ForceRepStatPoint(
     }
     double K_ij;
     K_ij = 0.5 * bla / v.Norm();
-    pinE = p.TransformToEllipseCoordinates(Pos(ped), orientation.x, orientation.y);
-    r = E.PointOnEllipse(pinE, extras.speed / v0, Pos(ped), extras.speed, orientation);
-    F_rep = ForceInterpolation(state, v0, K_ij, e_ij, vn, d, (r - Pos(ped)).Norm(), l);
+    pinE = p.TransformToEllipseCoordinates(ped.position, orientation.x, orientation.y);
+    r = E.PointOnEllipse(pinE, extras.speed / v0, ped.position, extras.speed, orientation);
+    F_rep = ForceInterpolation(ped, v0, K_ij, e_ij, vn, d, (r - ped.position).Norm(), l);
     return F_rep;
 }
 
@@ -428,6 +422,34 @@ double GeneralizedCentrifugalForceModel::AgentToAgentSpacing(
     return E1.EffectiveDistanceToEllipse(
         E2,
         Pos(agent1),
+        Pos(agent2),
+        scale1,
+        scale2,
+        e1.speed,
+        e2.speed,
+        orientation1,
+        orientation2);
+}
+
+double GeneralizedCentrifugalForceModel::AgentToAgentSpacingFromState(
+    const AgentState& agent1,
+    const GenericAgent& agent2) const
+{
+    const auto& s2 = agent2.model;
+    const auto& e1 = std::get<GCFMExtras>(*agent1.extras);
+    const auto& e2 = std::get<GCFMExtras>(*s2.extras);
+    const Ellipse E1{e1.Av, e1.AMin, e1.BMax, e1.BMin};
+    const Ellipse E2{e2.Av, e2.AMin, e2.BMax, e2.BMin};
+    const auto v0_1 = agent1.v0.value_or(Defaults::v0);
+    const auto v0_2 = s2.v0.value_or(Defaults::v0);
+    const double scale1 = (v0_1 == 0.0) ? 1.0 : e1.speed / v0_1;
+    const double scale2 = (v0_2 == 0.0) ? 1.0 : e2.speed / v0_2;
+    const auto orientation1 = agent1.orientation.value_or(Point{1.0, 0.0});
+    const auto orientation2 = s2.orientation.value_or(Point{1.0, 0.0});
+
+    return E1.EffectiveDistanceToEllipse(
+        E2,
+        agent1.position,
         Pos(agent2),
         scale1,
         scale2,
