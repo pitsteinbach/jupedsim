@@ -9,11 +9,11 @@ from jupedsim.models.custom_model import (
 )
 
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(kw_only=True, frozen=False)
 class PythonSocialForceModelState(CustomModelAgentState):
     position: tuple[float, float]
-    velocity: tuple[float, float]
-    desired_speed: float = 1.34
+    velocity: tuple[float, float] = (0,0)
+    desired_speed: float = 1.2
     reaction_time: float = 0.5
     agent_scale: float = 2000
     obstacle_scale: float = 2000
@@ -95,20 +95,20 @@ class PythonSocialForceModel(CustomOperationalModel):
         return (fx, fy)
 
     @staticmethod
-    def _social_force(state, other) -> tuple[float, float]:
+    def _social_force(
+        state: PythonSocialForceModelState, other: PythonSocialForceModelState
+    ) -> tuple[float, float]:
         """
-        Compute repulsive social force between two agents.
+        Compute repulsive social force between two agent states.
 
         Based on Helbing's model with psychological and body contact forces.
-        ``state`` is the focal agent's Python state; ``other`` is a _TransientAgent
-        neighbor whose ``.model`` returns the neighbor's Python state.
         """
         dx = state.position[0] - other.position[0]
         dy = state.position[1] - other.position[1]
         dist = np.sqrt(dx**2 + dy**2)
 
         # Minimum distance (sum of radii)
-        min_dist = state.radius + other.model.radius
+        min_dist = state.radius + other.radius
 
         if dist < 1e-3:  # Avoid division by zero
             return (0.0, 0.0)
@@ -122,8 +122,8 @@ class PythonSocialForceModel(CustomOperationalModel):
         t_y = n_x
 
         # Relative velocity
-        dvx = state.velocity[0] - other.model.velocity[0]
-        dvy = state.velocity[1] - other.model.velocity[1]
+        dvx = state.velocity[0] - other.velocity[0]
+        dvy = state.velocity[1] - other.velocity[1]
         dv_t = dvx * t_x + dvy * t_y  # tangential component
 
         # Distance-dependent factor
@@ -148,14 +148,13 @@ class PythonSocialForceModel(CustomOperationalModel):
 
     @staticmethod
     def _obstacle_force(
-        state,
+        state: PythonSocialForceModelState,
         obstacle: LineSegment,
     ) -> tuple[float, float]:
         """
         Compute repulsive force from an obstacle (line segment).
 
         Based on Helbing's model with psychological and body contact forces.
-        ``state`` is the focal agent's Python state.
         """
         # Get closest point on obstacle to agent
         closest_point = obstacle.closest_point(state.position)
@@ -184,17 +183,18 @@ class PythonSocialForceModel(CustomOperationalModel):
 
         return (fx, fy)
 
-    def compute_next(
-        self, dt: float, state, routing, geometry, neighborhood_search
+    def compute_next_state(
+        self, dt: float, state, destination, geometry, neighbor_states
     ):
         """
         Compute new position using Social Force Model.
 
         Args:
             dt: time step [s]
-            agent: Agent (current agent, exposing position, target and model)
+            state: current model state of the agent
+            destination: waypoint the agent is currently routed to
             geometry: Geometry for wall/obstacle queries
-            neighborhood_search: NeighborhoodSearch for neighbor queries
+            neighbor_states: frozen neighbor states of this agent in this step
 
         Returns:
             PythonSocialForceModelState carrying the full per-agent state with
@@ -203,8 +203,8 @@ class PythonSocialForceModel(CustomOperationalModel):
 
         # Get target direction (normalized)
         target_diff = (
-            routing.destination[0] - state.position[0],
-            routing.destination[1] - state.position[1],
+            destination[0] - state.position[0],
+            destination[1] - state.position[1],
         )
         # eq 1 in paper
         target_dir = self._normalize(target_diff)
@@ -218,7 +218,7 @@ class PythonSocialForceModel(CustomOperationalModel):
         )
 
         ## Add social forces from neighboring agents
-        for neighbor in neighborhood_search.get_neighboring_agents(state.position, 2.0):
+        for neighbor in neighbor_states:
             fx, fy = self._social_force(state, neighbor)
             acc_x += fx / state.mass
             acc_y += fy / state.mass
