@@ -21,8 +21,12 @@ timer_key_list = [
     "Neighborhood Search",
     "Operational Decision System",
     "Strategical Decision System",
+    "Stage System",
     "Tactical Decision System",
+    "Density Update",
+    "Floorfield Precompute",
     "Total Simulation Time",
+    "Total Iteration",
 ]
 
 
@@ -83,10 +87,16 @@ def main(
     sources = geo_collections.geoms[2]
     # waypoints = geo_collections.geoms[3]
     for run in range(0, number_of_runs):
+        trajectory_writer = jps.SqliteTrajectoryWriter(
+            output_file="evac_shortest_path_tastar.sqlite",
+            every_nth_frame=4,
+            commit_every_nth_write=100,
+        )
         simulation = jps.Simulation(
             model=jps.AnticipationVelocityModel(),
             geometry=geo,
             timer_log_level=3,
+            trajectory_writer=trajectory_writer,
         )
 
         # jps.enable_tracing()
@@ -98,15 +108,13 @@ def main(
 
         # exit areas
         exit_polygons = []
-        exit_ids = []  # sequence: A, B, C, D, E
 
         for exit in exits.geoms:
             exit_polygons.append(shapely.Polygon(list(exit.exterior.coords)))
-            exit_ids.append(
-                simulation.add_exit_stage(list(exit.exterior.coords))
-            )
 
-        journey = jps.JourneyDescription(exit_ids)
+        exit_id = simulation.add_merged_exit_stage(exit_polygons)
+
+        journey = jps.JourneyDescription([exit_id])
         journey_id = simulation.add_journey(journey)
 
         number_agents_stage = int(number_of_agents * 2 / 5)
@@ -137,8 +145,6 @@ def main(
         agent_parameters.radius = 0.15
         v_distribution = normal(1.34, 0.05, number_agents)
 
-        routing = jps.RoutingEngine(geo.geoms[0])
-
         for i in range(len(agent_positions)):
             agent_position = (
                 agent_positions[i][0],
@@ -146,26 +152,9 @@ def main(
             )
             agent_parameters.desired_speed = v_distribution[i]
 
-            # choose shortest path
-            min_distance = float("inf")
-            min_exit_id = -1
-
-            for j in range(len(exit_polygons)):
-                # calc path to exit
-                polygon = exit_polygons[j]
-                exit_point = (
-                    polygon.centroid.xy[0][0],
-                    polygon.centroid.xy[1][0],
-                )
-                path = routing.compute_waypoints(agent_positions[i], exit_point)
-                distance_to_exit = get_travelled_distance(path)
-                if distance_to_exit < min_distance:
-                    min_distance = distance_to_exit
-                    min_exit_id = j
-
             simulation.add_agent(
                 journey_id=journey_id,
-                stage_id=exit_ids[min_exit_id],
+                stage_id=exit_id,
                 position=agent_position,
                 state=agent_parameters,
             )
@@ -193,16 +182,26 @@ def main(
 
             except KeyboardInterrupt:
                 print("CTRL-C Received! Shutting down")
-                jps.dump_traces("evac_shortest_path_v1.prof")
+                jps.dump_traces("evac_shortest_path_tastar.prof")
+                trajectory_writer.close()
+                for key in timer_key_list:
+                    print(
+                        f"{key}: {simulation.timer.elapsed_time_us(key) / 1000000:.3f}s"
+                    )
                 sys.exit(1)
+        trajectory_writer.close()
 
         res_dict = {}
 
         for key in timer_key_list:
             res_dict[key] = simulation.timer.elapsed_time_us(key)
+            print(
+                f"{key}: {simulation.timer.elapsed_time_us(key) / 1000000:.3f}s"
+            )
         df_res = pd.concat(
             [df_res, pd.DataFrame(res_dict, index=[0])], ignore_index=True
         )
+
     return df_res
 
 
@@ -210,8 +209,8 @@ if __name__ == "__main__":
     res = pd.DataFrame(columns=timer_key_list)
     res = main(
         df_res=res,
-        number_of_runs=50,
-        number_of_iterations=200,
+        number_of_runs=5,
+        number_of_iterations=2000,
         number_of_agents=15000,
     )
     res.to_csv("evac_shortest_path_deque_ptr_15k_flt.csv", index=False)
