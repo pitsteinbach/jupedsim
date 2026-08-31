@@ -18,6 +18,7 @@ class Colors:
 
 class ZLayers:
     geo = 0
+    floorfield = 1
     graph_edges = 5
     grid = 10
     agents = 90

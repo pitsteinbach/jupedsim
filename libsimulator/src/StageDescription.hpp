@@ -19,6 +19,10 @@ struct ExitDescription {
     Polygon polygon;
 };
 
+struct MultiExitDescription {
+    std::vector<Polygon> polygons;
+};
+
 struct NotifiableWaitingSetDescription {
     std::vector<Point> slots;
 };
@@ -31,5 +35,6 @@ using StageDescription = std::variant<
     DirectSteeringDescription,
     WaypointDescription,
     ExitDescription,
+    MultiExitDescription,
     NotifiableWaitingSetDescription,
     NotifiableQueueDescription>;

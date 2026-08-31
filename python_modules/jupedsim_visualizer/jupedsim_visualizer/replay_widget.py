@@ -8,6 +8,8 @@ from PySide6.QtGui import QFont, QPaintEvent
 from PySide6.QtStateMachine import QState, QStateMachine
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -17,7 +19,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from vtkmodules.vtkCommonCore import vtkCommand
 
+from jupedsim_visualizer.floorfield_viz import FloorFieldViz
 from jupedsim_visualizer.geometry import Geometry
 from jupedsim_visualizer.geometry_widget import RenderWidget
 from jupedsim_visualizer.trajectory import Trajectory
@@ -144,10 +148,46 @@ class ReplayWidget(QWidget):
             geo, navi, [geo, trajectory], parent=self
         )
         self.geo = geo
+
+        self._ff_viz = FloorFieldViz(rec.geometry(), mode="density")
+        self.render_widget.ren.AddActor(self._ff_viz.get_actor())
+        self.render_widget.ren.AddActor2D(self._ff_viz.get_scalar_bar())
+
+        ff_controls = QHBoxLayout()
+        self._ff_toggle = QCheckBox("Floor field")
+        self._ff_mode = QComboBox()
+        self._ff_mode.addItems(["density", "dynamic_speed", "travel_time"])
+        self._ff_mode.setEnabled(False)
+        self._ff_interval_label = QLabel("every")
+        self._ff_interval_label.setEnabled(False)
+        self._ff_interval = QSpinBox()
+        self._ff_interval.setRange(1, 500)
+        self._ff_interval.setValue(1)
+        self._ff_interval.setSuffix(" frames")
+        self._ff_interval.setEnabled(False)
+        self._ff_dest_hint = QLabel("← click to set destination")
+        self._ff_dest_hint.setVisible(False)
+        ff_controls.addWidget(self._ff_toggle)
+        ff_controls.addWidget(self._ff_mode)
+        ff_controls.addWidget(self._ff_interval_label)
+        ff_controls.addWidget(self._ff_interval)
+        ff_controls.addWidget(self._ff_dest_hint)
+        ff_controls.addStretch()
+
         layout = QVBoxLayout()
+        layout.addLayout(ff_controls)
         layout.addWidget(self.render_widget, 1)
         layout.addWidget(self.control)
         self.setLayout(layout)
+
+        self.render_widget.style.AddObserver(
+            vtkCommand.LeftButtonReleaseEvent, self._on_ff_click
+        )
+
+        self._ff_toggle.toggled.connect(self._on_ff_toggled)
+        self._ff_mode.currentTextChanged.connect(self._on_ff_mode_changed)
+        self._ff_interval.valueChanged.connect(self._on_ff_interval_changed)
+
         self.control.play.toggled.connect(self.play)
         self.control.forward.clicked.connect(self.frame_forward)
         self.control.backward.clicked.connect(self.frame_backward)
@@ -158,11 +198,54 @@ class ReplayWidget(QWidget):
             lambda: self.goto_frame(self.trajectory.num_frames - 1)
         )
 
+    def _current_positions(self) -> list[tuple[float, float]]:
+        frame = self.rec.frame(self.trajectory.current_index)
+        return [(a.position[0], a.position[1]) for a in frame.agents]
+
+    def _on_ff_toggled(self, checked: bool) -> None:
+        self._ff_mode.setEnabled(checked)
+        self._ff_interval_label.setEnabled(checked)
+        self._ff_interval.setEnabled(checked)
+        if checked:
+            self._ff_viz.set_recompute_interval(self._ff_interval.value())
+            self._ff_viz.update_density(self._current_positions())
+        self._ff_viz.show(checked)
+        self.render_widget.render()
+
+    def _on_ff_mode_changed(self, mode: str) -> None:
+        self._ff_dest_hint.setVisible(mode == "travel_time")
+        self._ff_viz.set_mode(mode)
+        self.render_widget.render()
+
+    def _on_ff_interval_changed(self, steps: int) -> None:
+        self._ff_viz.set_recompute_interval(steps)
+
+    def _on_ff_click(self, obj, evt) -> None:
+        if not self._ff_toggle.isChecked():
+            return
+        if self._ff_mode.currentText() != "travel_time":
+            return
+        interactor = obj.GetInteractor()
+        pos = interactor.GetEventPosition()
+        renderer = self.render_widget.ren
+        renderer.SetDisplayPoint(pos[0], pos[1], 0)
+        renderer.DisplayToWorld()
+        world = renderer.GetWorldPoint()
+        x = world[0] / world[3]
+        y = world[1] / world[3]
+        if self._ff_viz.set_destination(x, y):
+            self.render_widget.render()
+
+    def _maybe_update_ff(self) -> None:
+        if self._ff_toggle.isChecked():
+            self._ff_viz.update_density(self._current_positions())
+
     def frame_forward(self):
         self.trajectory.advance_frame(self.control.speed_selector.value())
         self.control.update_replay_time(
             self.trajectory.current_index * (1 / self.rec.fps)
         )
+        self._maybe_update_ff()
         self.render_widget.render()
         with QSignalBlocker(self.control.slider):
             self.control.slider.setValue(self.trajectory.current_index)
@@ -172,6 +255,7 @@ class ReplayWidget(QWidget):
         self.control.update_replay_time(
             self.trajectory.current_index * (1 / self.rec.fps)
         )
+        self._maybe_update_ff()
         self.render_widget.render()
         with QSignalBlocker(self.control.slider):
             self.control.slider.setValue(self.trajectory.current_index)
@@ -181,6 +265,7 @@ class ReplayWidget(QWidget):
         self.control.update_replay_time(
             self.trajectory.current_index * (1 / self.rec.fps)
         )
+        self._maybe_update_ff()
         self.render_widget.render()
         with QSignalBlocker(self.control.slider):
             self.control.slider.setValue(self.trajectory.current_index)

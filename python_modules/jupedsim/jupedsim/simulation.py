@@ -232,6 +232,34 @@ class Simulation:
         exit_geometry = build_geometry(polygon)
         return self._obj.add_exit_stage(exit_geometry.boundary())
 
+    def add_merged_exit_stage(
+        self,
+        polygons: list[
+            str
+            | shapely.GeometryCollection
+            | shapely.Polygon
+            | shapely.MultiPolygon
+            | shapely.MultiPoint
+            | list[tuple[float, float]]
+        ],
+    ) -> int:
+        """Add multiple exit polygons as a single merged routing destination.
+
+        All polygons are registered with the floor-field router as one shared
+        destination, so agents automatically route to the nearest polygon.
+        Agent removal is triggered when an agent enters any of the polygons.
+
+        Arguments:
+            polygons:
+                List of exit polygons. Each entry accepts the same formats as
+                :meth:`add_exit_stage`.
+
+        Returns:
+            A single stage ID representing all polygons together.
+        """
+        boundaries = [build_geometry(poly).boundary() for poly in polygons]
+        return self._obj.add_merged_exit_stage(boundaries)
+
     def add_direct_steering_stage(self) -> int:
         """Add an direct steering stage to the simulation.
 

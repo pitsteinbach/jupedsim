@@ -10,7 +10,7 @@
 #include "OperationalModel.hpp"
 #include "OperationalModelType.hpp"
 #include "Point.hpp"
-#include "RoutingEngine.hpp"
+#include "Routing.hpp"
 #include "SimulationClock.hpp"
 #include "Stage.hpp"
 #include "StageDescription.hpp"
@@ -39,7 +39,7 @@ class Simulation
     StageSystem _stageSystem{};
     NeighborhoodSearch<GenericAgent> _neighborhoodSearch{2.2};
     std::unique_ptr<CollisionGeometry> _geometry{};
-    std::unique_ptr<RoutingEngine> _routingEngine{};
+    std::unique_ptr<Router> _routingEngine{};
     AgentContainer<GenericAgent> _agents;
     std::vector<GenericAgent::ID> _removedAgentsInLastIteration;
     std::unordered_map<Journey::ID, std::unique_ptr<Journey>> _journeys;
@@ -66,6 +66,9 @@ public:
     void Iterate();
     Journey::ID AddJourney(const std::map<BaseStage::ID, TransitionDescription>& stages);
     BaseStage::ID AddStage(const StageDescription stageDescription);
+    /// Registers all polygons as one merged eikonal destination so agents route to the
+    /// nearest exit automatically. Returns a single stage ID covering all polygons.
+    BaseStage::ID AddMergedExitStage(const std::vector<Polygon>& polygons);
     void MarkAgentForRemoval(GenericAgent::ID id);
     const std::vector<GenericAgent::ID>& RemovedAgents() const;
     size_t AgentCount() const;

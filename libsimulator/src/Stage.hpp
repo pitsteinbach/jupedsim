@@ -9,6 +9,7 @@
 #include "NeighborhoodSearch.hpp"
 #include "Point.hpp"
 #include "Polygon.hpp"
+#include "Routing.hpp"
 #include "UniqueID.hpp"
 #include "Util.hpp"
 
@@ -109,6 +110,7 @@ public:
 protected:
     ID id;
     size_t targeting{0};
+    size_t _destinationId{Router::DirectSteeringId};
 
 public:
     virtual ~BaseStage() = default;
@@ -123,6 +125,8 @@ public:
         assert(targeting >= 1);
         targeting = targeting - 1;
     }
+    size_t DestinationId() const { return _destinationId; }
+    void SetDestinationId(size_t id_) { _destinationId = id_; }
 };
 
 template <>
@@ -164,6 +168,21 @@ public:
     Point Target(const GenericAgent& agent) override;
     StageProxy Proxy(Simulation* simulation_) override;
     Polygon Position() const { return area; };
+};
+
+/// Like Exit but covers multiple polygons; agent is removed when inside any of them.
+/// All polygons share one floor-field destination so the router steers to the nearest one.
+class MultiExit : public BaseStage
+{
+    std::vector<Polygon> areas;
+    std::vector<GenericAgent::ID>& toRemove;
+
+public:
+    MultiExit(std::vector<Polygon> areas_, std::vector<GenericAgent::ID>& toRemove_);
+    ~MultiExit() override = default;
+    bool IsCompleted(const GenericAgent& agent) override;
+    Point Target(const GenericAgent& agent) override;
+    StageProxy Proxy(Simulation* simulation_) override;
 };
 
 class NotifiableWaitingSet : public BaseStage

@@ -181,7 +181,7 @@ public:
 
     ID Id() const { return id; }
 
-    std::tuple<Point, BaseStage::ID> Target(const GenericAgent& agent) const
+    std::tuple<Point, size_t, BaseStage::ID> Target(const GenericAgent& agent) const
     {
         auto& node = stages.at(agent.stageId);
         auto stage = node.stage;
@@ -191,7 +191,7 @@ public:
             stage = transition->NextStage();
         }
 
-        return std::make_tuple(stage->Target(agent), stage->Id());
+        return std::make_tuple(stage->Target(agent), stage->DestinationId(), stage->Id());
     }
 
     size_t CountStages() const { return stages.size(); }

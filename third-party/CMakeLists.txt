@@ -100,3 +100,12 @@ if (WIN32)
         NOMINMAX
     )
 endif (WIN32)
+
+################################################################################
+# Rust eikonal solver
+################################################################################
+
+find_package(Corrosion REQUIRED)
+corrosion_import_crate(MANIFEST_PATH eikonal/Cargo.toml)
+corrosion_import_crate(MANIFEST_PATH floorfield/Cargo.toml)
+#target_link_libraries(jupedsim PRIVATE eikonal)

@@ -2,6 +2,15 @@
 # Project setup
 ################################################################################
 cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
+
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    execute_process(
+        COMMAND xcrun --show-sdk-version
+        OUTPUT_VARIABLE _sdk_version
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "${_sdk_version}" CACHE STRING "macOS deployment target")
+endif()
+
 project(JuPedSim VERSION 2.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

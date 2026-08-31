@@ -133,6 +133,45 @@ StageProxy Exit::Proxy(Simulation* simulation)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// MultiExit
+////////////////////////////////////////////////////////////////////////////////
+MultiExit::MultiExit(std::vector<Polygon> areas_, std::vector<GenericAgent::ID>& toRemove_)
+    : areas(std::move(areas_)), toRemove(toRemove_)
+{
+    if(areas.empty()) {
+        throw SimulationError("MultiExit requires at least one polygon.");
+    }
+    for(const auto& area : areas) {
+        if(!area.IsConvex()) {
+            throw SimulationError("Exit areas need to be bounded by convex polygons.");
+        }
+    }
+}
+
+bool MultiExit::IsCompleted(const GenericAgent& agent)
+{
+    for(const auto& area : areas) {
+        if(area.IsInside(agent.Position())) {
+            toRemove.push_back(agent.id);
+            return true;
+        }
+    }
+    return false;
+}
+
+Point MultiExit::Target(const GenericAgent&)
+{
+    // destinationId is always set to the merged floor-field destination,
+    // so this value is never used for routing — return first centroid as placeholder.
+    return areas.front().Centroid();
+}
+
+StageProxy MultiExit::Proxy(Simulation* simulation)
+{
+    return ExitProxy(simulation, this);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// NotifiableWaitingSet
 ////////////////////////////////////////////////////////////////////////////////
 NotifiableWaitingSet::NotifiableWaitingSet(std::vector<Point> slots_) : slots(std::move(slots_))

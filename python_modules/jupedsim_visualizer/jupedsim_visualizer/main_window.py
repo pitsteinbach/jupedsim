@@ -133,7 +133,7 @@ class MainWindow(QMainWindow):
             geo = Geometry(navi)
             geo.show_triangulation(self._show_triangulation.isChecked())
             tab = ViewGeometryWidget(
-                navi, geo, name_text, info_text, parent=self
+                navi, geo, polygon, name_text, info_text, parent=self
             )
             tab.render_widget.show_grid(self._show_grid.isChecked())
             tab_idx = self.tabs.insertTab(0, tab, file.name)

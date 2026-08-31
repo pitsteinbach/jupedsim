@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <deque>
 #include <limits>
+#include <span>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -38,6 +39,31 @@ RoutingEngine::RoutingEngine(const PolyWithHoles& poly)
     }
     CGAL::mark_domain_in_triangulation(cdt);
     mesh = std::make_unique<Mesh>(cdt);
+}
+
+size_t RoutingEngine::AddDestination(const Poly& area)
+{
+    return AddDestination(std::span<const Poly>{&area, 1});
+}
+
+size_t RoutingEngine::AddDestination(std::span<const Poly> areas)
+{
+    if(areas.size() > 1) {
+        throw SimulationError(
+            "RoutingEngine (A*) does not support routing to multiple merged exits. "
+            "Register each exit polygon separately.");
+    }
+    return areas.empty() ? DirectSteeringId : AddDestination(areas[0]);
+}
+
+Point RoutingEngine::ComputeWaypoint(Point currentPosition, size_t destinationId)
+{
+    return ComputeWaypoint(currentPosition, _destinations[destinationId]);
+}
+
+std::vector<Point> RoutingEngine::ComputeAllWaypoints(Point currentPosition, size_t destinationId)
+{
+    return ComputeAllWaypoints(currentPosition, _destinations[destinationId]);
 }
 
 Point RoutingEngine::ComputeWaypoint(Point currentPosition, Point destination)

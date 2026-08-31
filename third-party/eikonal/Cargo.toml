@@ -1,0 +1,18 @@
+[package]
+name = "eikonal"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+cubecl = { version = "0.10.0", features = ["wgpu"] }
+cxx = "1.0"
+num-traits = "0.2"
+rayon = "1"
+wgpu = "29"
+pollster = "0.3"
+
+[build-dependencies]
+cxx-build = "1.0"

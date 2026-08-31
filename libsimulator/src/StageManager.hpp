@@ -39,6 +39,10 @@ public:
                     const ExitDescription& d) -> std::unique_ptr<BaseStage> {
                     return std::make_unique<Exit>(d.polygon, removedAgentsInLastIteration);
                 },
+                [&removedAgentsInLastIteration](
+                    const MultiExitDescription& d) -> std::unique_ptr<BaseStage> {
+                    return std::make_unique<MultiExit>(d.polygons, removedAgentsInLastIteration);
+                },
                 [](const NotifiableWaitingSetDescription& d) -> std::unique_ptr<BaseStage> {
                     return std::make_unique<NotifiableWaitingSet>(d.slots);
                 },

@@ -47,6 +47,7 @@ class RenderWidget(QVTKRenderWindowInteractor):
         cam.ParallelProjectionOn()
 
         style = vtkInteractorStyleUser()
+        self.style = style
         self.iren.SetInteractorStyle(style)
         self.iren.Initialize()
 

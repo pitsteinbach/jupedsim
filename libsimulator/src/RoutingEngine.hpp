@@ -4,37 +4,42 @@
 #include "CfgCgal.hpp"
 #include "Mesh.hpp"
 #include "Point.hpp"
+#include "Routing.hpp"
 
 #include <cstddef>
 #include <memory>
 #include <variant>
 #include <vector>
 
-using LocationID = size_t;
-using Location = std::variant<Point, LocationID>;
-
-class RoutingEngine
+class RoutingEngine : public Router
 {
     CDT cdt{};
     std::unique_ptr<Mesh> mesh{};
+    std::vector<Point> _destinations;
 
 public:
     RoutingEngine();
     explicit RoutingEngine(const PolyWithHoles& poly);
-    ~RoutingEngine() = default;
+    ~RoutingEngine() override = default;
 
     RoutingEngine(const RoutingEngine& other) = delete;
     RoutingEngine& operator=(const RoutingEngine& other) = delete;
 
-    RoutingEngine(RoutingEngine&& other) = default;
-    RoutingEngine& operator=(RoutingEngine&& other) = default;
+    RoutingEngine(RoutingEngine&& other) = delete;
+    RoutingEngine& operator=(RoutingEngine&& other) = delete;
 
-    Point ComputeWaypoint(Point currentPosition, Point destination);
-    std::vector<Point> ComputeAllWaypoints(Point currentPosition, Point destination);
-    bool IsRoutable(Point p) const;
-    void Update();
+    size_t AddDestination(const Poly& area) override;
+    size_t AddDestination(std::span<const Poly> areas) override;
 
-    const Mesh* MeshData() const { return mesh.get(); };
+    Point ComputeWaypoint(Point currentPosition, size_t destinationId) override;
+    std::vector<Point> ComputeAllWaypoints(Point currentPosition, size_t destinationId) override;
+
+    Point ComputeWaypoint(Point currentPosition, Point destination) override;
+    std::vector<Point> ComputeAllWaypoints(Point currentPosition, Point destination) override;
+    bool IsRoutable(Point p) const override;
+    void Update() override;
+
+    const Mesh* MeshData() const { return mesh.get(); }
 
 private:
     CDT::Face_handle find_face(K::Point_2) const;

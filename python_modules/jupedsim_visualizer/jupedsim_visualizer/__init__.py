@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 import jupedsim_visualizer.config
+import jupedsim_visualizer.floorfield_viz
 import jupedsim_visualizer.geometry
 import jupedsim_visualizer.geometry_widget
 import jupedsim_visualizer.grid

@@ -36,3 +36,6 @@ __pycache__/
 
 .idea/
 /build*
+/venv*
+/third-party/eikonal/target/
+/third-party/floorfield/target/

@@ -3,6 +3,7 @@
 #include "OperationalModels/OperationalModelState.hpp"
 #include "OperationalModels/OperationalModelType.hpp"
 #include "Point.hpp"
+#include "Routing.hpp"
 #include "UniqueID.hpp"
 #include "Visitor.hpp"
 
@@ -23,6 +24,9 @@ struct GenericAgent {
     // This is evaluated by the "operational level"
     Point nextTarget{};
     Point finalTarget{};
+    // ID of the pre-registered polygon destination, or Router::DirectSteeringId when the agent
+    // routes to a raw point (DirectSteering / WaitingSet / Queue stages).
+    size_t destinationId{Router::DirectSteeringId};
 
     OperationalModelState state{};
 

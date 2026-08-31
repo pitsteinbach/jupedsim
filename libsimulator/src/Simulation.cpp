@@ -2,6 +2,7 @@
 #include "Simulation.hpp"
 
 #include "CollisionGeometry.hpp"
+#include "Floorfield.hpp"
 #include "GenericAgent.hpp"
 #include "IteratorPair.hpp"
 #include "Journey.hpp"
@@ -62,7 +63,7 @@ Simulation::Simulation(
     : _clock(dT)
     , _operationalDecisionSystem(std::move(operationalModel))
     , _geometry(std::move(geometry))
-    , _routingEngine(std::make_unique<RoutingEngine>(_geometry->Polygon()))
+    , _routingEngine(std::make_unique<Floorfield<>>(_geometry->Polygon()))
 {
 }
 
@@ -101,9 +102,26 @@ void Simulation::Iterate()
         _stageSystem.Run(_stageManager, _neighborhoodSearch, *_geometry);
     }
 
+    AgentDestinations dests;
     {
         JPS_SCOPED_TIMER_AND_TRACE(_timer, "Strategical Decision System", General);
-        _stategicalDecisionSystem.Run(_journeys, _agents, _stageManager);
+        dests = _stategicalDecisionSystem.Run(_journeys, _agents, _stageManager);
+    }
+
+    {
+        JPS_SCOPED_TIMER_AND_TRACE(_timer, "Density Update", Detailed);
+        std::vector<Point> positions;
+        positions.reserve(_agents.size());
+        for(const auto& agent : _agents) {
+            positions.push_back(agent.Position());
+        }
+        _routingEngine->UpdateDensity(positions);
+    }
+
+    {
+        JPS_SCOPED_TIMER_AND_TRACE(_timer, "Floorfield Precompute", Detailed);
+        _routingEngine->PrecomputeDestinations(
+            std::span<const size_t>(dests.ids), std::span<const Point>(dests.points));
     }
 
     {
@@ -216,6 +234,7 @@ BaseStage::ID Simulation::AddStage(const StageDescription stageDescription)
                     throw SimulationError("Exit {} not inside walkable area", d.polygon.Centroid());
                 }
             },
+            // Note: destination registration for exits happens after stage creation below.
             [this](const NotifiableWaitingSetDescription& d) -> void {
                 for(const auto& point : d.slots) {
                     if(!this->_geometry->InsideGeometry(point)) {
@@ -234,10 +253,38 @@ BaseStage::ID Simulation::AddStage(const StageDescription stageDescription)
             },
             [](const DirectSteeringDescription&) -> void {
 
+            },
+            [](const MultiExitDescription&) -> void {
+                throw SimulationError("Use AddMergedExitStage() to create a multi-polygon exit.");
             }},
         stageDescription);
 
     return _stageManager.AddStage(stageDescription, _removedAgentsInLastIteration);
+}
+
+BaseStage::ID Simulation::AddMergedExitStage(const std::vector<Polygon>& polygons)
+{
+    ThrowIfIterating("AddMergedExitStage");
+    if(polygons.empty()) {
+        throw SimulationError("AddMergedExitStage requires at least one polygon.");
+    }
+    for(const auto& poly : polygons) {
+        if(!_geometry->InsideGeometry(poly.Centroid())) {
+            throw SimulationError("Exit {} not inside walkable area", poly.Centroid());
+        }
+    }
+
+    std::vector<Poly> cgalPolys;
+    cgalPolys.reserve(polygons.size());
+    for(const auto& poly : polygons) {
+        cgalPolys.push_back(static_cast<Poly>(poly));
+    }
+    const size_t mergedDestId = _routingEngine->AddDestination(std::span<const Poly>(cgalPolys));
+
+    const auto stageId =
+        _stageManager.AddStage(MultiExitDescription{polygons}, _removedAgentsInLastIteration);
+    _stageManager.Stage(stageId)->SetDestinationId(mergedDestId);
+    return stageId;
 }
 
 GenericAgent::ID Simulation::AddAgent(GenericAgent agent)

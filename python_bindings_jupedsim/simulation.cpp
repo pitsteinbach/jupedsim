@@ -66,6 +66,17 @@ void init_simulation(py::module_& m)
                 return sim.AddStage(ExitDescription{Polygon{intoPoints(polygon)}}).getID();
             })
         .def(
+            "add_merged_exit_stage",
+            [](Simulation& sim,
+               const std::vector<std::vector<std::tuple<double, double>>>& polygons) {
+                std::vector<Polygon> ps;
+                ps.reserve(polygons.size());
+                for(const auto& poly : polygons) {
+                    ps.emplace_back(intoPoints(poly));
+                }
+                return sim.AddMergedExitStage(ps).getID();
+            })
+        .def(
             "add_direct_steering_stage",
             [](Simulation& sim) { return sim.AddStage(DirectSteeringDescription{}).getID(); })
         .def(
