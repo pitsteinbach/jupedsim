@@ -188,5 +188,17 @@ void init_simulation(py::module_& m)
         .def(
             "get_duration",
             [](Simulation& sim, const std::string_view name) { return sim.GetTimerDuration(name); })
-        .def("get_durations", [](Simulation& sim) { return sim.GetTimerDurations(); });
+        .def("get_durations", [](Simulation& sim) { return sim.GetTimerDurations(); })
+        .def(
+            "configure_floor_field_hdf5",
+            [](Simulation& sim, const std::string& path, uint32_t every_n) {
+                sim.ConfigureFloorFieldHdf5Output(path, every_n);
+            },
+            py::arg("path"),
+            py::arg("every_n") = 1u,
+            "Write a floor-field snapshot to the HDF5 file every *every_n* recompute cycles.")
+        .def(
+            "close_floor_field_hdf5",
+            [](Simulation& sim) { sim.CloseFloorFieldHdf5Output(); },
+            "Flush and close the floor-field HDF5 output.");
 }

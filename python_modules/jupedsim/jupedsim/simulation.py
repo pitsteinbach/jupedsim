@@ -561,3 +561,22 @@ class Simulation:
             Timer object.
         """
         return self._timer
+
+    def configure_floor_field_hdf5(
+        self, path: str, every_nth_frame: int = 1
+    ) -> None:
+        """Enable floor-field HDF5 output.
+
+        Writes a snapshot of the travel-time field every *every_nth_frame*
+        recompute cycles into the HDF5 file at *path*.  Call this after
+        creating the simulation and before the first ``iterate()``.
+
+        Arguments:
+            path: Path to the output HDF5 file (created or appended to).
+            every_nth_frame: Write a snapshot every this many recompute cycles.
+        """
+        self._obj.configure_floor_field_hdf5(str(path), int(every_nth_frame))
+
+    def close_floor_field_hdf5(self) -> None:
+        """Flush and close the floor-field HDF5 output file."""
+        self._obj.close_floor_field_hdf5()

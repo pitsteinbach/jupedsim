@@ -88,6 +88,15 @@ public:
     OperationalModelType ModelType() const;
     StageProxy Stage(BaseStage::ID stageId);
     CollisionGeometry Geo() const;
+    // Floor-field inspection — valid for the default Floorfield<float> router.
+    uint32_t FloorFieldGridWidth() const;
+    uint32_t FloorFieldGridHeight() const;
+    Point FloorFieldOrigin() const;
+    double FloorFieldCellSize() const;
+    std::vector<double> FloorFieldSpeedField() const;
+    std::vector<double> FloorFieldTravelTimes() const;
+    void ConfigureFloorFieldHdf5Output(const std::string& path, uint32_t everyN);
+    void CloseFloorFieldHdf5Output();
     void PushTimer(const std::string_view name, size_t probe_log_level = 0);
     void PopTimer(const std::string_view name);
     void SetTimerLogLevel(int level) { _timer.setLogLevel(level); };

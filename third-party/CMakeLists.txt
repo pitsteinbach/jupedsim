@@ -107,5 +107,14 @@ endif (WIN32)
 
 find_package(Corrosion REQUIRED)
 corrosion_import_crate(MANIFEST_PATH eikonal/Cargo.toml)
-corrosion_import_crate(MANIFEST_PATH floorfield/Cargo.toml)
+
+# Pass --features no_halo to the floorfield (and transitively eikonal) crate
+# to benchmark the 16×16 smem baseline against the 18×18 halo default.
+# Usage: cmake -DJUPEDSIM_GPU_NO_HALO=ON <build_dir>
+option(JUPEDSIM_GPU_NO_HALO "Build GPU FIM without 18×18 smem halo (benchmark variant)" OFF)
+if(JUPEDSIM_GPU_NO_HALO)
+    corrosion_import_crate(MANIFEST_PATH floorfield/Cargo.toml FEATURES no_halo)
+else()
+    corrosion_import_crate(MANIFEST_PATH floorfield/Cargo.toml)
+endif()
 #target_link_libraries(jupedsim PRIVATE eikonal)

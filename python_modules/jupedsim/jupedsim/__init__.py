@@ -71,9 +71,13 @@ from jupedsim.simulation import Simulation
 from jupedsim.sqlite_serialization import SqliteTrajectoryWriter
 
 try:
-    from jupedsim.hdf5_serialization import Hdf5TrajectoryWriter
-except ImportError:  # h5py not installed; HDF5 writer remains unavailable.
+    from jupedsim.hdf5_serialization import (
+        FloorFieldHdf5Writer,
+        Hdf5TrajectoryWriter,
+    )
+except ImportError:  # h5py not installed; HDF5 writers remain unavailable.
     Hdf5TrajectoryWriter = None  # type: ignore[assignment, misc]
+    FloorFieldHdf5Writer = None  # type: ignore[assignment, misc]
 from jupedsim.stages import (
     ExitStage,
     NotifiableQueueStage,
@@ -125,6 +129,7 @@ __all__ = [
     "GeneralizedCentrifugalForceModel",
     "GeneralizedCentrifugalForceModelState",
     "Geometry",
+    "FloorFieldHdf5Writer",
     "Hdf5TrajectoryWriter",
     "IncorrectParameterError",
     "JourneyDescription",

@@ -121,7 +121,9 @@ void Simulation::Iterate()
     {
         JPS_SCOPED_TIMER_AND_TRACE(_timer, "Floorfield Precompute", Detailed);
         _routingEngine->PrecomputeDestinations(
-            std::span<const size_t>(dests.ids), std::span<const Point>(dests.points));
+            std::span<const size_t>(dests.ids),
+            std::span<const Point>(dests.points),
+            _clock.Iteration());
     }
 
     {
@@ -469,4 +471,51 @@ TimerEntry::duration_type Simulation::GetTimerDuration(const std::string_view na
 std::map<std::string, TimerEntry::duration_type> Simulation::GetTimerDurations() const
 {
     return _timer.getDurations();
+}
+
+// ── Floor-field accessors ─────────────────────────────────────────────────────
+
+static Floorfield<>* asFloorfield(Router* r)
+{
+    return static_cast<Floorfield<>*>(r);
+}
+
+uint32_t Simulation::FloorFieldGridWidth() const
+{
+    return asFloorfield(_routingEngine.get())->GridWidth();
+}
+
+uint32_t Simulation::FloorFieldGridHeight() const
+{
+    return asFloorfield(_routingEngine.get())->GridHeight();
+}
+
+Point Simulation::FloorFieldOrigin() const
+{
+    return asFloorfield(_routingEngine.get())->Origin();
+}
+
+double Simulation::FloorFieldCellSize() const
+{
+    return asFloorfield(_routingEngine.get())->CellSize();
+}
+
+std::vector<double> Simulation::FloorFieldSpeedField() const
+{
+    return asFloorfield(_routingEngine.get())->SpeedField();
+}
+
+std::vector<double> Simulation::FloorFieldTravelTimes() const
+{
+    return asFloorfield(_routingEngine.get())->TravelTimes();
+}
+
+void Simulation::ConfigureFloorFieldHdf5Output(const std::string& path, uint32_t everyN)
+{
+    static_cast<Floorfield<>*>(_routingEngine.get())->ConfigureHdf5Output(path, everyN);
+}
+
+void Simulation::CloseFloorFieldHdf5Output()
+{
+    static_cast<Floorfield<>*>(_routingEngine.get())->CloseHdf5Output();
 }

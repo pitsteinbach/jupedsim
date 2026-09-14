@@ -42,8 +42,10 @@ public:
     size_t AddDestination(std::span<const Poly> areas) override;
 
     void UpdateDensity(std::span<const Point> positions) override;
-    void
-    PrecomputeDestinations(std::span<const size_t> ids, std::span<const Point> points) override;
+    void PrecomputeDestinations(
+        std::span<const size_t> ids,
+        std::span<const Point> points,
+        uint64_t simIteration) override;
 
     Point ComputeWaypoint(Point currentPosition, size_t destinationId) override;
     std::vector<Point> ComputeAllWaypoints(Point currentPosition, size_t destinationId) override;
@@ -61,7 +63,10 @@ public:
     std::vector<double> TravelTimes() const;
     std::vector<double> DensityField() const;
     std::vector<double> DynamicSpeedField() const;
+    std::vector<double> TravelTimeGradient() const;
     void SetSolver(EikonalSolver s);
     void ClearPointCache();
     void SetRecomputeInterval(int steps);
+    void ConfigureHdf5Output(const std::string& path, uint32_t everyN);
+    void CloseHdf5Output();
 };

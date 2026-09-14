@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
+import bisect
 import math
+from pathlib import Path
 
 from jupedsim import RoutingEngine
 from jupedsim.recording import Recording
@@ -10,6 +12,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -21,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 from vtkmodules.vtkCommonCore import vtkCommand
 
-from jupedsim_visualizer.floorfield_viz import FloorFieldViz
+from jupedsim_visualizer.floorfield_viz import FloorFieldHdf5Viz, FloorFieldViz
 from jupedsim_visualizer.geometry import Geometry
 from jupedsim_visualizer.geometry_widget import RenderWidget
 from jupedsim_visualizer.trajectory import Trajectory
@@ -151,7 +154,12 @@ class ReplayWidget(QWidget):
 
         self._ff_viz = FloorFieldViz(rec.geometry(), mode="density")
         self.render_widget.ren.AddActor(self._ff_viz.get_actor())
+        self.render_widget.ren.AddActor(self._ff_viz.get_arrow_actor())
+        self.render_widget.ren.AddActor(self._ff_viz.get_iso_actor())
         self.render_widget.ren.AddActor2D(self._ff_viz.get_scalar_bar())
+
+        # HDF5 floor-field overlay (loaded on demand)
+        self._ff_hdf5_viz: FloorFieldHdf5Viz | None = None
 
         ff_controls = QHBoxLayout()
         self._ff_toggle = QCheckBox("Floor field")
@@ -167,15 +175,38 @@ class ReplayWidget(QWidget):
         self._ff_interval.setEnabled(False)
         self._ff_dest_hint = QLabel("← click to set destination")
         self._ff_dest_hint.setVisible(False)
+        self._arrows_toggle = QCheckBox("Gradient arrows")
+        self._arrows_toggle.setEnabled(False)
+        self._iso_toggle = QCheckBox("Isolines")
+        self._iso_toggle.setEnabled(False)
         ff_controls.addWidget(self._ff_toggle)
         ff_controls.addWidget(self._ff_mode)
         ff_controls.addWidget(self._ff_interval_label)
         ff_controls.addWidget(self._ff_interval)
         ff_controls.addWidget(self._ff_dest_hint)
+        ff_controls.addWidget(self._arrows_toggle)
+        ff_controls.addWidget(self._iso_toggle)
         ff_controls.addStretch()
+
+        # HDF5 overlay controls (second row)
+        ff_hdf5_controls = QHBoxLayout()
+        self._ff_hdf5_load_btn = QPushButton("Load floor field HDF5…")
+        self._ff_hdf5_toggle = QCheckBox("Show")
+        self._ff_hdf5_toggle.setEnabled(False)
+        self._ff_hdf5_arrows = QCheckBox("Arrows")
+        self._ff_hdf5_arrows.setEnabled(False)
+        self._ff_hdf5_iso = QCheckBox("Isolines")
+        self._ff_hdf5_iso.setEnabled(False)
+        self._ff_hdf5_label = QLabel()
+        ff_hdf5_controls.addWidget(self._ff_hdf5_load_btn)
+        ff_hdf5_controls.addWidget(self._ff_hdf5_toggle)
+        ff_hdf5_controls.addWidget(self._ff_hdf5_arrows)
+        ff_hdf5_controls.addWidget(self._ff_hdf5_iso)
+        ff_hdf5_controls.addWidget(self._ff_hdf5_label, 1)
 
         layout = QVBoxLayout()
         layout.addLayout(ff_controls)
+        layout.addLayout(ff_hdf5_controls)
         layout.addWidget(self.render_widget, 1)
         layout.addWidget(self.control)
         self.setLayout(layout)
@@ -187,6 +218,18 @@ class ReplayWidget(QWidget):
         self._ff_toggle.toggled.connect(self._on_ff_toggled)
         self._ff_mode.currentTextChanged.connect(self._on_ff_mode_changed)
         self._ff_interval.valueChanged.connect(self._on_ff_interval_changed)
+        self._arrows_toggle.toggled.connect(
+            lambda checked: (
+                self._ff_viz.set_gradient_arrows_visible(checked),
+                self.render_widget.render(),
+            )
+        )
+        self._iso_toggle.toggled.connect(
+            lambda checked: (
+                self._ff_viz.set_isolines_visible(checked),
+                self.render_widget.render(),
+            )
+        )
 
         self.control.play.toggled.connect(self.play)
         self.control.forward.clicked.connect(self.frame_forward)
@@ -196,6 +239,23 @@ class ReplayWidget(QWidget):
         self.control.begin.clicked.connect(lambda: self.goto_frame(0))
         self.control.end.clicked.connect(
             lambda: self.goto_frame(self.trajectory.num_frames - 1)
+        )
+
+        self._ff_hdf5_load_btn.clicked.connect(self._on_load_ff_hdf5)
+        self._ff_hdf5_toggle.toggled.connect(self._on_ff_hdf5_toggled)
+        self._ff_hdf5_arrows.toggled.connect(
+            lambda checked: (
+                self._ff_hdf5_viz
+                and self._ff_hdf5_viz.set_gradient_arrows_visible(checked),
+                self.render_widget.render(),
+            )
+        )
+        self._ff_hdf5_iso.toggled.connect(
+            lambda checked: (
+                self._ff_hdf5_viz
+                and self._ff_hdf5_viz.set_isolines_visible(checked),
+                self.render_widget.render(),
+            )
         )
 
     def _current_positions(self) -> list[tuple[float, float]]:
@@ -214,6 +274,9 @@ class ReplayWidget(QWidget):
 
     def _on_ff_mode_changed(self, mode: str) -> None:
         self._ff_dest_hint.setVisible(mode == "travel_time")
+        if mode != "travel_time":
+            self._arrows_toggle.setEnabled(False)
+            self._iso_toggle.setEnabled(False)
         self._ff_viz.set_mode(mode)
         self.render_widget.render()
 
@@ -234,11 +297,74 @@ class ReplayWidget(QWidget):
         x = world[0] / world[3]
         y = world[1] / world[3]
         if self._ff_viz.set_destination(x, y):
+            self._arrows_toggle.setEnabled(True)
+            self._iso_toggle.setEnabled(True)
             self.render_widget.render()
 
     def _maybe_update_ff(self) -> None:
         if self._ff_toggle.isChecked():
             self._ff_viz.update_density(self._current_positions())
+
+    def _sync_ff_hdf5(self) -> None:
+        """Seek the HDF5 floor-field overlay to the snapshot closest to the current sim iteration."""
+        if self._ff_hdf5_viz is None or not self._ff_hdf5_toggle.isChecked():
+            return
+        sim_iter = self.trajectory.current_index * self.rec.every_nth_frame
+        indices = self._ff_hdf5_viz.frame_sim_indices
+        # Find the latest snapshot whose sim iteration <= current
+        pos = bisect.bisect_right(indices, sim_iter) - 1
+        pos = max(0, min(pos, self._ff_hdf5_viz.num_frames - 1))
+        self._ff_hdf5_viz.set_frame(pos)
+        self._ff_hdf5_label.setText(
+            f"FF frame {pos + 1}/{self._ff_hdf5_viz.num_frames}  (sim iter {indices[pos]})"
+        )
+
+    def _on_load_ff_hdf5(self) -> None:
+        file, _ = QFileDialog.getOpenFileName(
+            self,
+            caption="Open floor field HDF5",
+            filter="HDF5 files (*.h5 *.hdf5);;All files (*)",
+        )
+        if not file:
+            return
+        try:
+            viz = FloorFieldHdf5Viz(file)
+            if self._ff_hdf5_viz is not None:
+                # Remove old actors
+                self.render_widget.ren.RemoveActor(
+                    self._ff_hdf5_viz.get_actor()
+                )
+                self.render_widget.ren.RemoveActor(
+                    self._ff_hdf5_viz.get_arrow_actor()
+                )
+                self.render_widget.ren.RemoveActor(
+                    self._ff_hdf5_viz.get_iso_actor()
+                )
+                self.render_widget.ren.RemoveActor2D(
+                    self._ff_hdf5_viz.get_scalar_bar()
+                )
+            self._ff_hdf5_viz = viz
+            self.render_widget.ren.AddActor(viz.get_actor())
+            self.render_widget.ren.AddActor(viz.get_arrow_actor())
+            self.render_widget.ren.AddActor(viz.get_iso_actor())
+            self.render_widget.ren.AddActor2D(viz.get_scalar_bar())
+            self._ff_hdf5_toggle.setEnabled(True)
+            self._ff_hdf5_arrows.setEnabled(True)
+            self._ff_hdf5_iso.setEnabled(True)
+            self._ff_hdf5_toggle.setChecked(True)
+            self._ff_hdf5_load_btn.setText(Path(file).name)
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.critical(self, "Error loading floor field HDF5", str(e))
+
+    def _on_ff_hdf5_toggled(self, checked: bool) -> None:
+        if self._ff_hdf5_viz is None:
+            return
+        self._ff_hdf5_viz.show(checked)
+        if checked:
+            self._sync_ff_hdf5()
+        self.render_widget.render()
 
     def frame_forward(self):
         self.trajectory.advance_frame(self.control.speed_selector.value())
@@ -246,6 +372,7 @@ class ReplayWidget(QWidget):
             self.trajectory.current_index * (1 / self.rec.fps)
         )
         self._maybe_update_ff()
+        self._sync_ff_hdf5()
         self.render_widget.render()
         with QSignalBlocker(self.control.slider):
             self.control.slider.setValue(self.trajectory.current_index)
@@ -256,6 +383,7 @@ class ReplayWidget(QWidget):
             self.trajectory.current_index * (1 / self.rec.fps)
         )
         self._maybe_update_ff()
+        self._sync_ff_hdf5()
         self.render_widget.render()
         with QSignalBlocker(self.control.slider):
             self.control.slider.setValue(self.trajectory.current_index)
@@ -266,6 +394,7 @@ class ReplayWidget(QWidget):
             self.trajectory.current_index * (1 / self.rec.fps)
         )
         self._maybe_update_ff()
+        self._sync_ff_hdf5()
         self.render_widget.render()
         with QSignalBlocker(self.control.slider):
             self.control.slider.setValue(self.trajectory.current_index)

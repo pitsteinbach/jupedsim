@@ -104,6 +104,12 @@ if(JUPEDSIM_ENABLE_PARALLEL)
         endif()
     endif()
 endif()
+# hdf5-metno (used by the floorfield Rust crate) links libhdf5 dynamically.
+# Corrosion does not forward this cargo link-lib to CMake consumers, so we
+# resolve it explicitly here so that targets linking simulator (and therefore
+# py_jupedsim) actually load libhdf5 at runtime.
+find_package(HDF5 REQUIRED COMPONENTS C)
+
 target_link_libraries(simulator PUBLIC
     common
     fmt::fmt
@@ -112,6 +118,7 @@ target_link_libraries(simulator PUBLIC
     glm::glm
     perfetto
     floorfield
+    HDF5::HDF5
 )
 target_link_options(simulator PUBLIC
     $<$<AND:$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>,$<BOOL:${BUILD_WITH_SANITIZERS}>>:-fsanitize=address,undefined>

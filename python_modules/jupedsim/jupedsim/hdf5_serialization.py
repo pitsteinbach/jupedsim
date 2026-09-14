@@ -395,3 +395,163 @@ class Hdf5TrajectoryWriter(TrajectoryWriter):
         old = self._frame_geom_ds.shape[0]
         self._frame_geom_ds.resize((old + arr.shape[0],))
         self._frame_geom_ds[old:] = arr
+
+
+class FloorFieldHdf5Writer:
+    """Append periodic floor-field snapshots to an HDF5 file.
+
+    Writes to the group ``/floor_fields/`` in the file, which can be the
+    same file as :class:`Hdf5TrajectoryWriter` (both coexist safely within
+    one process via HDF5's internal reference counting) or a standalone file.
+
+    Schema written under ``/floor_fields/``::
+
+        attrs:          origin_x, origin_y, cell_size, width, height, dest_x, dest_y
+        speed_field     float32[height, width]        written once in begin_writing
+        frame_indices   uint32[N]                     simulation frame per snapshot
+        travel_times    float32[N, height, width]     one layer per snapshot
+
+    Usage::
+
+        traj_writer = jps.Hdf5TrajectoryWriter(output_file=Path("out.h5"), every_nth_frame=4)
+        ff_writer   = jps.FloorFieldHdf5Writer(
+            output_file=Path("out.h5"),
+            floorfield=ff,
+            dest=(18.0, 2.5),
+            # Match the floor-field recompute interval so each snapshot
+            # captures a freshly computed field.
+            every_nth_frame=200,
+        )
+        traj_writer.begin_writing(sim)
+        ff_writer.begin_writing(sim)
+
+        while sim.iterate():
+            traj_writer.write_iteration_state(sim)
+            ff_writer.write_iteration_state(sim)  # no-ops 199/200 iterations
+
+        traj_writer.close()
+        ff_writer.close()
+
+    Parameters
+    ----------
+    output_file:
+        HDF5 file path.  Opened in append mode so it may be the same path
+        passed to :class:`Hdf5TrajectoryWriter`.
+    floorfield:
+        A :class:`~jupedsim.routing.Floorfield` instance whose
+        :py:meth:`~jupedsim.routing.Floorfield.travel_times` is sampled on
+        each recorded frame.
+    dest:
+        ``(x, y)`` destination passed to
+        :py:meth:`~jupedsim.routing.Floorfield.compute_waypoints` before
+        the simulation starts; stored as metadata only.
+    every_nth_frame:
+        Record every n-th simulation iteration (1 = every iteration).
+    compression_level:
+        gzip level 0–9 for the travel-time dataset (default 1).
+    """
+
+    def __init__(
+        self,
+        *,
+        output_file: pathlib.Path,
+        floorfield,
+        dest: tuple[float, float],
+        every_nth_frame: int = 10,
+        compression_level: int = 1,
+    ) -> None:
+        if every_nth_frame < 1:
+            raise ValueError("'every_nth_frame' must be >= 1")
+        if not 0 <= compression_level <= 9:
+            raise ValueError("'compression_level' must be between 0 and 9")
+
+        self._output_file = pathlib.Path(output_file)
+        self._ff = floorfield
+        self._dest = dest
+        self._every_nth_frame = every_nth_frame
+        self._compression_level = compression_level
+
+        self._file: h5py.File | None = None
+        self._tt_ds: h5py.Dataset | None = None
+        self._fi_ds: h5py.Dataset | None = None
+
+    def begin_writing(self, simulation: Simulation) -> None:
+        self._file = h5py.File(self._output_file, "a")
+
+        sf = self._ff.speed_field()
+        w: int = sf["width"]
+        h: int = sf["height"]
+        ox, oy = sf["origin"]
+        cs: float = sf["cell_size"]
+
+        comp_kwargs: dict = {}
+        if self._compression_level > 0:
+            comp_kwargs = {
+                "compression": "gzip",
+                "compression_opts": self._compression_level,
+                "shuffle": True,
+            }
+
+        grp = self._file.require_group("floor_fields")
+        grp.attrs["origin_x"] = float(ox)
+        grp.attrs["origin_y"] = float(oy)
+        grp.attrs["cell_size"] = float(cs)
+        grp.attrs["width"] = int(w)
+        grp.attrs["height"] = int(h)
+        grp.attrs["dest_x"] = float(self._dest[0])
+        grp.attrs["dest_y"] = float(self._dest[1])
+        grp.attrs["every_nth_frame"] = int(self._every_nth_frame)
+
+        if "speed_field" not in grp:
+            speed = np.array(sf["data"], dtype=np.float32).reshape(h, w)
+            grp.create_dataset("speed_field", data=speed, **comp_kwargs)
+
+        if "travel_times" not in grp:
+            self._tt_ds = grp.create_dataset(
+                "travel_times",
+                shape=(0, h, w),
+                maxshape=(None, h, w),
+                dtype=np.float32,
+                chunks=(1, h, w),
+                **comp_kwargs,
+            )
+            self._fi_ds = grp.create_dataset(
+                "frame_indices",
+                shape=(0,),
+                maxshape=(None,),
+                dtype=np.uint32,
+                chunks=(512,),
+            )
+        else:
+            self._tt_ds = grp["travel_times"]
+            self._fi_ds = grp["frame_indices"]
+
+    def write_iteration_state(self, simulation: Simulation) -> None:
+        if self._file is None or self._tt_ds is None or self._fi_ds is None:
+            return
+
+        iteration = simulation.iteration_count()
+        if iteration % self._every_nth_frame != 0:
+            return
+
+        tt = self._ff.travel_times()
+        h, w = tt["height"], tt["width"]
+        data = np.array(tt["data"], dtype=np.float32).reshape(h, w)
+
+        frame = np.uint32(iteration // self._every_nth_frame)
+        n = self._tt_ds.shape[0]
+        self._tt_ds.resize((n + 1, h, w))
+        self._tt_ds[n] = data
+        self._fi_ds.resize((n + 1,))
+        self._fi_ds[n] = frame
+
+    def close(self) -> None:
+        if self._file is not None:
+            self._file.flush()
+            self._file.close()
+            self._file = None
+            self._tt_ds = None
+            self._fi_ds = None
+
+    def every_nth_frame(self) -> int:
+        return self._every_nth_frame

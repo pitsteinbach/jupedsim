@@ -14,5 +14,10 @@ rayon = "1"
 wgpu = "29"
 pollster = "0.3"
 
+[features]
+# Benchmark variant: 16×16 smem, no halo — border neighbours read from global u[].
+# Build with: cargo build --features no_halo  (or the floorfield crate equivalent)
+no_halo = []
+
 [build-dependencies]
 cxx-build = "1.0"

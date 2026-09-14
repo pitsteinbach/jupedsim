@@ -4,6 +4,7 @@ pub mod mesh;
 use std::collections::HashMap;
 
 use geometry::GridParams;
+use hdf5_metno as hdf5;
 use num_traits::Float;
 use rayon::prelude::*;
 use tracing::instrument;
@@ -75,6 +76,53 @@ trait EikonalOps: Float + Send + Sync + Copy + PartialEq + num_traits::FromPrimi
         h: usize,
         cs: Self,
     );
+    /// Non-blocking GPU warm dispatch. Returns `true` if GPU async dispatch
+    /// happened (collect required); `false` if a synchronous fallback was used.
+    fn fim_batch_dispatch_warm(
+        out_ptrs: &[usize],
+        prior_ptrs: &[usize],
+        n: usize,
+        speed: &[Self],
+        changed: &[u32],
+        sources_flat: &[u32],
+        src_offsets: &[u32],
+        w: usize,
+        h: usize,
+        cs: Self,
+    ) -> bool {
+        Self::fim_batch_warm(
+            out_ptrs,
+            prior_ptrs,
+            n,
+            speed,
+            changed,
+            sources_flat,
+            src_offsets,
+            w,
+            h,
+            cs,
+        );
+        false
+    }
+    /// Non-blocking GPU cold dispatch. Returns `true` if GPU async dispatch
+    /// happened; `false` if synchronous.
+    fn fim_batch_dispatch_cold(
+        out_ptrs: &[usize],
+        n: usize,
+        speed: &[Self],
+        sources_flat: &[u32],
+        src_offsets: &[u32],
+        w: usize,
+        h: usize,
+        cs: Self,
+    ) -> bool {
+        Self::fim_batch_cold(out_ptrs, n, speed, sources_flat, src_offsets, w, h, cs);
+        false
+    }
+    /// Collect a pending deferred readback. No-op for CPU paths.
+    fn fim_collect(w: usize, h: usize) {
+        let _ = (w, h);
+    }
     fn cast_f64(d: f64) -> Self;
 }
 
@@ -137,6 +185,46 @@ impl EikonalOps for f64 {
             cs,
         );
     }
+    fn fim_batch_dispatch_warm(
+        out_ptrs: &[usize],
+        prior_ptrs: &[usize],
+        n: usize,
+        speed: &[f64],
+        changed: &[u32],
+        sources_flat: &[u32],
+        src_offsets: &[u32],
+        w: usize,
+        h: usize,
+        cs: f64,
+    ) -> bool {
+        eikonal::fim_batch_dispatch_warm_ms(
+            out_ptrs,
+            prior_ptrs,
+            n,
+            speed,
+            changed,
+            sources_flat,
+            src_offsets,
+            w,
+            h,
+            cs,
+        )
+    }
+    fn fim_batch_dispatch_cold(
+        out_ptrs: &[usize],
+        n: usize,
+        speed: &[f64],
+        sources_flat: &[u32],
+        src_offsets: &[u32],
+        w: usize,
+        h: usize,
+        cs: f64,
+    ) -> bool {
+        eikonal::fim_batch_dispatch_cold_ms(out_ptrs, n, speed, sources_flat, src_offsets, w, h, cs)
+    }
+    fn fim_collect(w: usize, h: usize) {
+        eikonal::fim_collect(w, h);
+    }
     fn cast_f64(d: f64) -> f64 {
         d
     }
@@ -150,19 +238,19 @@ impl EikonalOps for f32 {
         eikonal::fmm::solve_into_typed(out, speed, src, w, h, cs);
     }
     fn fim_solve_into(out: &mut [f32], speed: &[f32], src: &[u32], w: usize, h: usize, cs: f32) {
-        eikonal::fsm::solve_into_typed(out, speed, src, w, h, cs); // CPU FIM is f64-only
+        eikonal::fim::solve_into_typed(out, speed, src, w, h, cs);
     }
     fn fim_warm_into(
         out: &mut [f32],
         speed: &[f32],
-        _prior: &[f32],
-        _changed: &[u32],
+        prior: &[f32],
+        changed: &[u32],
         src: &[u32],
         w: usize,
         h: usize,
         cs: f32,
     ) {
-        eikonal::fsm::solve_into_typed(out, speed, src, w, h, cs); // cold re-solve
+        eikonal::fim::solve_warm_into_typed(out, speed, prior, changed, src, w, h, cs);
     }
     fn fim_batch_cold(
         out_ptrs: &[usize],
@@ -200,6 +288,55 @@ impl EikonalOps for f32 {
             h,
             cs,
         );
+    }
+    fn fim_batch_dispatch_warm(
+        out_ptrs: &[usize],
+        prior_ptrs: &[usize],
+        n: usize,
+        speed: &[f32],
+        changed: &[u32],
+        sources_flat: &[u32],
+        src_offsets: &[u32],
+        w: usize,
+        h: usize,
+        cs: f32,
+    ) -> bool {
+        eikonal::fim_batch_dispatch_warm_ms_f32(
+            out_ptrs,
+            prior_ptrs,
+            n,
+            speed,
+            changed,
+            sources_flat,
+            src_offsets,
+            w,
+            h,
+            cs,
+        )
+    }
+    fn fim_batch_dispatch_cold(
+        out_ptrs: &[usize],
+        n: usize,
+        speed: &[f32],
+        sources_flat: &[u32],
+        src_offsets: &[u32],
+        w: usize,
+        h: usize,
+        cs: f32,
+    ) -> bool {
+        eikonal::fim_batch_dispatch_cold_ms_f32(
+            out_ptrs,
+            n,
+            speed,
+            sources_flat,
+            src_offsets,
+            w,
+            h,
+            cs,
+        )
+    }
+    fn fim_collect(w: usize, h: usize) {
+        eikonal::fim_collect_f32(w, h);
     }
     fn cast_f64(d: f64) -> f32 {
         d as f32
@@ -265,6 +402,20 @@ fn build_csr<T>(ids: &[usize], destinations: &[DestEntry<T>]) -> (Vec<u32>, Vec<
 
 // ─── Generic floor-field core ────────────────────────────────────────────────
 
+/// State kept while HDF5 floor-field output is active.
+/// The file is held open for the lifetime of the simulation so each snapshot
+/// is an efficient append rather than a full open/close cycle.
+struct Hdf5OutputState {
+    tt_ds: hdf5::Dataset,
+    fi_ds: hdf5::Dataset,
+    /// Write every N recompute cycles (1 = every cycle).
+    every_n: u32,
+    /// How many recompute cycles have completed since configure was called.
+    recompute_count: u64,
+    /// Keep the File alive so datasets remain valid (HDF5 ref-counts).
+    _file: hdf5::File,
+}
+
 struct FloorfieldInner<T: EikonalOps> {
     grid: GridParams,
     speed_field: Vec<T>,
@@ -283,12 +434,20 @@ struct FloorfieldInner<T: EikonalOps> {
     changed_cells: Vec<u32>,
     step_counter: i32,
     recompute_interval: i32,
+    // Iterations between GPU dispatch and readback. 0 = synchronous (default).
+    // When > 0 and the FIM GPU solver is active, precompute_destinations issues
+    // the GPU solve at step_counter==0 without waiting, then collects the result
+    // at step_counter==readback_delay, keeping old data valid in between.
+    readback_delay: i32,
+    pending_warm_ids: Vec<usize>,
+    pending_cold_ids: Vec<usize>,
     dynamic_field_built: bool,
     solver: EikonalSolver,
     solver_benchmarked: bool,
     ceil_density: T,
     jam_density: T,
     last_travel_times: Vec<T>,
+    hdf5_output: Option<Hdf5OutputState>,
 }
 
 impl<T: EikonalOps> FloorfieldInner<T> {
@@ -344,12 +503,16 @@ impl<T: EikonalOps> FloorfieldInner<T> {
             changed_cells: Vec::new(),
             step_counter: 0,
             recompute_interval: 200,
+            readback_delay: 0,
+            pending_warm_ids: Vec::new(),
+            pending_cold_ids: Vec::new(),
             dynamic_field_built: false,
             solver,
             solver_benchmarked,
             ceil_density: T::cast_f64(2.0),
             jam_density: T::cast_f64(6.0),
             last_travel_times: Vec::new(),
+            hdf5_output: None,
         }
     }
 
@@ -634,6 +797,21 @@ impl<T: EikonalOps> FloorfieldInner<T> {
         }
     }
 
+    /// EIKONAL_USE_WARM=1 routes destinations that have a valid prior through the
+    /// warm restart instead of a cold re-solve. Off by default: warm is only faster
+    /// when the changed region is near the source (see gpu_threshold_reset).
+    fn use_warm() -> bool {
+        static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *V.get_or_init(|| std::env::var("EIKONAL_USE_WARM").is_ok())
+    }
+
+    /// EIKONAL_VERIFY_WARM=1 recomputes every warm batch with a cold solve and
+    /// reports the difference. Expensive -- for validation runs only.
+    fn verify_warm() -> bool {
+        static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *V.get_or_init(|| std::env::var("EIKONAL_VERIFY_WARM").is_ok())
+    }
+
     fn solve_warm_batch(&mut self, ids: &[usize]) {
         if ids.is_empty() {
             return;
@@ -675,6 +853,44 @@ impl<T: EikonalOps> FloorfieldInner<T> {
             h,
             cs,
         );
+        if Self::verify_warm() {
+            // Cold reference on exactly the same field, then compare cell by cell.
+            let mut scratch: Vec<Vec<T>> = ids.iter().map(|_| vec![T::infinity(); n]).collect();
+            let sp: Vec<usize> = scratch
+                .iter_mut()
+                .map(|v| v.as_mut_ptr() as usize)
+                .collect();
+            T::fim_batch_cold(&sp, n, &speed, &sources_flat, &src_offsets, w, h, cs);
+            let (mut mism, mut worst_rel, mut worst_abs) = (0usize, 0.0f64, 0.0f64);
+            let mut both = 0usize;
+            for (i, &id) in ids.iter().enumerate() {
+                let e = &self.destinations[id];
+                let wbuf = &e.bufs[1 - e.active];
+                for c in 0..n {
+                    let a = wbuf[c].to_f64().unwrap_or(f64::NAN);
+                    let b = scratch[i][c].to_f64().unwrap_or(f64::NAN);
+                    match (a.is_finite(), b.is_finite()) {
+                        (true, true) => {
+                            both += 1;
+                            let d = (a - b).abs();
+                            if d > worst_abs {
+                                worst_abs = d;
+                            }
+                            if b > 1.0 && d / b > worst_rel {
+                                worst_rel = d / b;
+                            }
+                        }
+                        (x, y) if x != y => mism += 1,
+                        _ => {}
+                    }
+                }
+            }
+            println!(
+                "[verify_warm] dests={} both={both} reach_mismatch={mism} \
+worst_abs={worst_abs:.4} worst_rel={worst_rel:.6}",
+                ids.len()
+            );
+        }
         for &id in ids {
             self.destinations[id].flip();
         }
@@ -712,17 +928,155 @@ impl<T: EikonalOps> FloorfieldInner<T> {
         self.last_travel_times = tt;
     }
 
+    // ── Async dispatch helpers ────────────────────────────────────────────────
+
+    fn dispatch_warm_batch_async(&mut self, ids: &[usize]) {
+        if ids.is_empty() {
+            return;
+        }
+        let n = self.grid.width as usize * self.grid.height as usize;
+        let cs = self.cell_size_t();
+        let w = self.grid.width as usize;
+        let h = self.grid.height as usize;
+        let speed = self.active_speed().to_vec();
+        let changed = self.changed_cells.clone();
+
+        for &id in ids {
+            let e = &mut self.destinations[id];
+            if e.other_buf_mut().len() != n {
+                e.other_buf_mut().resize(n, T::infinity());
+            }
+        }
+        let out_ptrs: Vec<usize> = ids
+            .iter()
+            .map(|&id| {
+                self.destinations[id].bufs[1 - self.destinations[id].active].as_ptr() as usize
+            })
+            .collect();
+        let prior_ptrs: Vec<usize> = ids
+            .iter()
+            .map(|&id| self.destinations[id].current_buf().as_ptr() as usize)
+            .collect();
+        let (sources_flat, src_offsets) = build_csr(ids, &self.destinations);
+        let dispatched = T::fim_batch_dispatch_warm(
+            &out_ptrs,
+            &prior_ptrs,
+            n,
+            &speed,
+            &changed,
+            &sources_flat,
+            &src_offsets,
+            w,
+            h,
+            cs,
+        );
+        if dispatched {
+            // Serve old valid data during the lead period; flip to new at collect.
+            for &id in ids {
+                self.destinations[id].valid = true;
+            }
+            self.pending_warm_ids.extend_from_slice(ids);
+        } else {
+            for &id in ids {
+                self.destinations[id].flip();
+            }
+        }
+    }
+
+    fn dispatch_cold_batch_async(&mut self, ids: &[usize]) {
+        if ids.is_empty() {
+            return;
+        }
+        let n = self.grid.width as usize * self.grid.height as usize;
+        let cs = self.cell_size_t();
+        let w = self.grid.width as usize;
+        let h = self.grid.height as usize;
+        let speed = self.active_speed().to_vec();
+
+        for &id in ids {
+            let e = &mut self.destinations[id];
+            if e.other_buf_mut().len() != n {
+                e.other_buf_mut().resize(n, T::infinity());
+            }
+        }
+        let out_ptrs: Vec<usize> = ids
+            .iter()
+            .map(|&id| {
+                self.destinations[id].bufs[1 - self.destinations[id].active].as_ptr() as usize
+            })
+            .collect();
+        let (sources_flat, src_offsets) = build_csr(ids, &self.destinations);
+        let dispatched =
+            T::fim_batch_dispatch_cold(&out_ptrs, n, &speed, &sources_flat, &src_offsets, w, h, cs);
+        if dispatched {
+            // No prior data; leave valid=false so ensure_dest falls back to CPU
+            // if these dests are queried during the lead period.
+            self.pending_cold_ids.extend_from_slice(ids);
+        } else {
+            for &id in ids {
+                self.destinations[id].flip();
+            }
+        }
+    }
+
+    fn collect_and_flip(&mut self) {
+        let w = self.grid.width as usize;
+        let h = self.grid.height as usize;
+        T::fim_collect(w, h);
+        for &id in &self.pending_warm_ids {
+            self.destinations[id].flip();
+        }
+        for &id in &self.pending_cold_ids {
+            self.destinations[id].flip();
+        }
+        self.pending_warm_ids.clear();
+        self.pending_cold_ids.clear();
+    }
+
+    fn set_readback_delay_inner(&mut self, delay: i32) {
+        self.readback_delay = delay.max(0);
+    }
+
     #[instrument(skip_all, fields(n_points = points_xy.len() / 2))]
-    fn precompute_destinations(&mut self, points_xy: &[f64]) {
+    fn precompute_destinations(&mut self, points_xy: &[f64], sim_iteration: u64) {
+        // Collect phase: fires `readback_delay` iterations after the dispatch.
+        let has_pending = !self.pending_warm_ids.is_empty() || !self.pending_cold_ids.is_empty();
+        if has_pending && self.readback_delay > 0 && self.step_counter == self.readback_delay {
+            let t0 = std::time::Instant::now();
+            self.collect_and_flip();
+            println!(
+                "precompute_destinations collect: {:.1}ms",
+                t0.elapsed().as_secs_f64() * 1e3
+            );
+            return;
+        }
+
         if self.step_counter != 0 {
             return;
         }
 
+        let t_total = std::time::Instant::now();
         let mut seen = std::collections::HashSet::new();
         let mut warm_ids: Vec<usize> = Vec::new();
         let mut cold_ids: Vec<usize> = Vec::new();
         let mut unchanged_ids: Vec<usize> = Vec::new();
-
+        for id in 0..self.n_polygon_dests {
+            let entry = &self.destinations[id];
+            if entry.valid || !seen.insert(id) {
+                continue;
+            }
+            if entry.has_prior && self.dynamic_field_built {
+                if self.changed_cells.is_empty() {
+                    unchanged_ids.push(id);
+                } else if Self::use_warm() {
+                    warm_ids.push(id);
+                } else {
+                    cold_ids.push(id);
+                }
+            } else {
+                cold_ids.push(id);
+            }
+        }
         for chunk in points_xy.chunks_exact(2) {
             let cell = self.snap_to_cell(chunk[0], chunk[1]);
             let id = self.get_or_register_point(cell);
@@ -736,14 +1090,20 @@ impl<T: EikonalOps> FloorfieldInner<T> {
             if entry.has_prior && self.dynamic_field_built {
                 if self.changed_cells.is_empty() {
                     unchanged_ids.push(id);
-                } else {
+                } else if Self::use_warm() {
                     warm_ids.push(id);
-                    //cold_ids.push(id);
-                } // warm restart, but also cold solve for benchmarking
+                } else {
+                    cold_ids.push(id);
+                }
             } else {
                 cold_ids.push(id);
             }
         }
+
+        // Stable ordering keeps GPU slot d bound to the same destination ID
+        // across calls, so u_buf priors remain valid without re-uploading.
+        warm_ids.sort_unstable();
+        cold_ids.sort_unstable();
 
         if warm_ids.is_empty() && cold_ids.is_empty() && unchanged_ids.is_empty() {
             return;
@@ -757,13 +1117,60 @@ impl<T: EikonalOps> FloorfieldInner<T> {
             self.destinations[id].valid = true;
         }
 
-        let _w = (!warm_ids.is_empty())
-            .then(|| tracing::trace_span!("warm_batch", n = warm_ids.len()).entered());
-        self.solve_warm_batch(&warm_ids);
-
+        // Cold destinations have no valid prior to serve during the lead period:
+        // if ensure_dest fires mid-lead it would CPU-solve and flip the dest,
+        // then collect_and_flip would flip it again → double-flip → empty buf.
+        // Cold solves are always synchronous; only warm dests (with valid old data)
+        // can be deferred safely.
+        let use_async = self.readback_delay > 0 && self.solver == EikonalSolver::Fim;
+        if use_async {
+            self.dispatch_warm_batch_async(&warm_ids);
+        } else {
+            let _w = (!warm_ids.is_empty())
+                .then(|| tracing::trace_span!("warm_batch", n = warm_ids.len()).entered());
+            self.solve_warm_batch(&warm_ids);
+        }
         let _c = (!cold_ids.is_empty())
             .then(|| tracing::trace_span!("cold_batch", n = cold_ids.len()).entered());
         self.solve_cold_batch(&cold_ids);
+
+        let t_elapsed = t_total.elapsed().as_secs_f64() * 1e3;
+        println!(
+            "precompute_destinations: warm={} cold={} unchanged={} mode={} elapsed={:.1}ms",
+            warm_ids.len(),
+            cold_ids.len(),
+            unchanged_ids.len(),
+            if use_async { "async" } else { "sync" },
+            t_elapsed
+        );
+
+        // Refresh last_travel_times from the first polygon destination so the
+        // HDF5 snapshot (and Python travel_times()) always reflects a real solve.
+        if let Some(first) = self.destinations.first() {
+            let buf = first.current_buf();
+            if buf.len() == self.grid.width as usize * self.grid.height as usize {
+                self.last_travel_times = buf.clone();
+            }
+        }
+
+        // HDF5 snapshot: fires every `every_n` recompute cycles.
+        if let Some(ref mut state) = self.hdf5_output {
+            state.recompute_count += 1;
+            if state.recompute_count % state.every_n as u64 == 0 {
+                if let Err(e) = Self::write_hdf5_snapshot(
+                    &state.tt_ds,
+                    &state.fi_ds,
+                    sim_iteration,
+                    &self.last_travel_times,
+                    &self.grid,
+                ) {
+                    eprintln!(
+                        "[floorfield] HDF5 write error at recompute {}: {e}",
+                        state.recompute_count
+                    );
+                }
+            }
+        }
     }
 
     fn compute_gradient(&self, row: i32, col: i32, tt: &[T]) -> (f64, f64) {
@@ -932,6 +1339,32 @@ impl<T: EikonalOps> FloorfieldInner<T> {
             .map(|&v| num_traits::cast(v).unwrap_or(0.0))
             .collect()
     }
+
+    /// Compute the Sobel gradient of the last travel-time field for every cell.
+    /// Returns interleaved (gx, gy) pairs in row-major order, length = 2*w*h.
+    /// Wall cells (travel-time == inf) get (0.0, 0.0).
+    fn travel_time_gradient_f64(&self) -> Vec<f64> {
+        let n = self.grid.width as usize * self.grid.height as usize;
+        let mut out = vec![0.0f64; 2 * n];
+        if self.last_travel_times.is_empty() {
+            return out;
+        }
+        let tt = &self.last_travel_times;
+        for row in 0..self.grid.height as i32 {
+            for col in 0..self.grid.width as i32 {
+                let idx = row as usize * self.grid.width as usize + col as usize;
+                let tv: f64 = num_traits::cast(tt[idx]).unwrap_or(f64::INFINITY);
+                if tv.is_infinite() {
+                    continue;
+                }
+                let (gx, gy) = self.compute_gradient(row, col, tt);
+                out[2 * idx] = gx;
+                out[2 * idx + 1] = gy;
+            }
+        }
+        out
+    }
+
     fn set_solver_inner(&mut self, solver: u8) {
         self.solver = match solver {
             1 => EikonalSolver::Fmm,
@@ -947,6 +1380,126 @@ impl<T: EikonalOps> FloorfieldInner<T> {
     }
     fn set_recompute_interval_inner(&mut self, steps: i32) {
         self.recompute_interval = steps;
+    }
+
+    fn configure_hdf5_output_inner(&mut self, path: &str, every_n: u32) {
+        match self.configure_hdf5_output_impl(path, every_n) {
+            Ok(()) => {}
+            Err(e) => eprintln!("[floorfield] configure_hdf5_output error: {e}"),
+        }
+    }
+
+    fn configure_hdf5_output_impl(&mut self, path: &str, every_n: u32) -> hdf5::Result<()> {
+        use hdf5::{Extent, SimpleExtents};
+        let h = self.grid.height as usize;
+        let w = self.grid.width as usize;
+
+        let file = hdf5::File::append(path)?;
+
+        let grp = match file.group("floor_fields") {
+            Ok(g) => g,
+            Err(_) => {
+                let g = file.create_group("floor_fields")?;
+                g.new_attr::<f64>()
+                    .shape(())
+                    .create("origin_x")?
+                    .write_scalar(&self.grid.origin[0])?;
+                g.new_attr::<f64>()
+                    .shape(())
+                    .create("origin_y")?
+                    .write_scalar(&self.grid.origin[1])?;
+                g.new_attr::<f64>()
+                    .shape(())
+                    .create("cell_size")?
+                    .write_scalar(&self.grid.cell_size)?;
+                g.new_attr::<u32>()
+                    .shape(())
+                    .create("width")?
+                    .write_scalar(&self.grid.width)?;
+                g.new_attr::<u32>()
+                    .shape(())
+                    .create("height")?
+                    .write_scalar(&self.grid.height)?;
+                g
+            }
+        };
+
+        if !grp.link_exists("speed_field") {
+            let sf_f32: Vec<f32> = self
+                .speed_field
+                .iter()
+                .map(|&v| num_traits::cast::<T, f32>(v).unwrap_or(0.0))
+                .collect();
+            let arr = ndarray::Array2::from_shape_vec((h, w), sf_f32).unwrap();
+            grp.new_dataset_builder()
+                .with_data(&arr)
+                .create("speed_field")?;
+        }
+
+        let tt_ds = match grp.dataset("travel_times") {
+            Ok(ds) => ds,
+            Err(_) => grp
+                .new_dataset::<f32>()
+                .chunk([1_usize, h, w])
+                .shape(SimpleExtents::new([
+                    Extent::resizable(0),
+                    Extent::from(h),
+                    Extent::from(w),
+                ]))
+                .create("travel_times")?,
+        };
+
+        let fi_ds = match grp.dataset("frame_indices") {
+            Ok(ds) => ds,
+            Err(_) => grp
+                .new_dataset::<u64>()
+                .chunk([1_usize])
+                .shape(SimpleExtents::new([Extent::resizable(0)]))
+                .create("frame_indices")?,
+        };
+
+        self.hdf5_output = Some(Hdf5OutputState {
+            tt_ds,
+            fi_ds,
+            every_n,
+            recompute_count: 0,
+            _file: file,
+        });
+        Ok(())
+    }
+
+    fn close_hdf5_output_inner(&mut self) {
+        self.hdf5_output = None;
+    }
+
+    fn write_hdf5_snapshot(
+        tt_ds: &hdf5::Dataset,
+        fi_ds: &hdf5::Dataset,
+        frame_index: u64,
+        last_travel_times: &[T],
+        grid: &GridParams,
+    ) -> hdf5::Result<()> {
+        use ndarray::s;
+        let h = grid.height as usize;
+        let w = grid.width as usize;
+        let n = tt_ds.shape()[0];
+
+        let data_f32: Vec<f32> = last_travel_times
+            .iter()
+            .map(|&v| num_traits::cast::<T, f32>(v).unwrap_or(f32::INFINITY))
+            .collect();
+        let data_2d = ndarray::Array2::from_shape_vec((h, w), data_f32).unwrap();
+        let data_3d = data_2d.insert_axis(ndarray::Axis(0)); // [1, h, w]
+
+        tt_ds.resize([n + 1, h, w])?;
+        tt_ds.write_slice(&data_3d, s![n..n + 1, .., ..])?;
+
+        let n_fi = fi_ds.shape()[0];
+        fi_ds.resize([n_fi + 1])?;
+        let fi_arr = ndarray::arr1(&[frame_index]);
+        fi_ds.write_slice(&fi_arr, s![n_fi..n_fi + 1])?;
+
+        Ok(())
     }
 
     fn benchmark_solvers(&mut self, example_cell: u32) {
@@ -1007,8 +1560,8 @@ impl Floorfield {
     fn update_density(&mut self, positions_xy: &[f64]) {
         dispatch!(self, inner => inner.update_density(positions_xy))
     }
-    fn precompute_destinations(&mut self, points_xy: &[f64]) {
-        dispatch!(self, inner => inner.precompute_destinations(points_xy))
+    fn precompute_destinations(&mut self, points_xy: &[f64], sim_iteration: u64) {
+        dispatch!(self, inner => inner.precompute_destinations(points_xy, sim_iteration))
     }
     fn is_routable(&self, px: f64, py: f64) -> bool {
         match self {
@@ -1086,6 +1639,9 @@ impl Floorfield {
     fn set_recompute_interval(&mut self, steps: i32) {
         dispatch!(self, inner => inner.set_recompute_interval_inner(steps))
     }
+    fn set_readback_delay(&mut self, delay: i32) {
+        dispatch!(self, inner => inner.set_readback_delay_inner(delay))
+    }
     fn grid_width(&self) -> u32 {
         match self {
             Floorfield::F32(inner) => inner.grid.width,
@@ -1115,6 +1671,15 @@ impl Floorfield {
             Floorfield::F32(inner) => inner.grid.cell_size,
             Floorfield::F64(inner) => inner.grid.cell_size,
         }
+    }
+    fn get_travel_time_gradient(&self) -> Vec<f64> {
+        dispatch!(self, inner => inner.travel_time_gradient_f64())
+    }
+    fn configure_hdf5_output(&mut self, path: &str, every_n: u32) {
+        dispatch!(self, inner => inner.configure_hdf5_output_inner(path, every_n))
+    }
+    fn close_hdf5_output(&mut self) {
+        dispatch!(self, inner => inner.close_hdf5_output_inner())
     }
 }
 
@@ -1242,7 +1807,7 @@ mod ffi {
             hole_lengths: &[u32],
         ) -> usize;
         fn update_density(self: &mut Floorfield, positions_xy: &[f64]);
-        fn precompute_destinations(self: &mut Floorfield, points_xy: &[f64]);
+        fn precompute_destinations(self: &mut Floorfield, points_xy: &[f64], sim_iteration: u64);
         fn is_routable(self: &Floorfield, px: f64, py: f64) -> bool;
         fn compute_waypoint_dest(
             self: &mut Floorfield,
@@ -1279,10 +1844,14 @@ mod ffi {
         fn set_solver(self: &mut Floorfield, solver: u8);
         fn clear_point_cache(self: &mut Floorfield);
         fn set_recompute_interval(self: &mut Floorfield, steps: i32);
+        fn set_readback_delay(self: &mut Floorfield, delay: i32);
         fn grid_width(self: &Floorfield) -> u32;
         fn grid_height(self: &Floorfield) -> u32;
         fn grid_origin_x(self: &Floorfield) -> f64;
         fn grid_origin_y(self: &Floorfield) -> f64;
         fn grid_cell_size(self: &Floorfield) -> f64;
+        fn get_travel_time_gradient(self: &Floorfield) -> Vec<f64>;
+        fn configure_hdf5_output(self: &mut Floorfield, path: &str, every_n: u32);
+        fn close_hdf5_output(self: &mut Floorfield);
     }
 }

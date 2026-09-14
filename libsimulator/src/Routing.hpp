@@ -52,8 +52,10 @@ public:
     /// during the coming tactical phase. Implementations may compute those floor fields in
     /// parallel here so the per-agent routing loop only reads cached results. The default
     /// is a no-op; IDs must be unique across the two spans (no duplicates within ids).
-    virtual void
-    PrecomputeDestinations(std::span<const size_t> /*ids*/, std::span<const Point> /*points*/)
+    virtual void PrecomputeDestinations(
+        std::span<const size_t> /*ids*/,
+        std::span<const Point> /*points*/,
+        uint64_t /*simIteration*/)
     {
     }
 

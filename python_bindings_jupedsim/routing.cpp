@@ -161,8 +161,25 @@ void init_routing(py::module_& m)
                     pts.push_back(intoPoint(p));
                 std::vector<size_t> ids;
                 ff.PrecomputeDestinations(
-                    std::span<const size_t>(ids), std::span<const Point>(pts));
+                    std::span<const size_t>(ids), std::span<const Point>(pts), 0u);
             },
             py::arg("points"),
-            "Precompute floor fields for the given list of (x, y) point destinations.");
+            "Precompute floor fields for the given list of (x, y) point destinations.")
+        .def(
+            "travel_time_gradient",
+            [](const Floorfield& ff) {
+                // Returns interleaved (gx, gy) per cell computed via the
+                // 3×3 Sobel kernel.  Reshape to (height, width, 2) with numpy.
+                // Wall cells carry (0.0, 0.0).
+                py::dict d;
+                d["width"] = ff.GridWidth();
+                d["height"] = ff.GridHeight();
+                d["origin"] = std::make_tuple(ff.Origin().x, ff.Origin().y);
+                d["cell_size"] = ff.CellSize();
+                d["data"] = ff.TravelTimeGradient();
+                return d;
+            },
+            "Sobel gradient of the last travel-time field.  "
+            "dict with width/height/origin/cell_size/data; "
+            "data is interleaved (gx,gy) per cell, length = 2*width*height.");
 }

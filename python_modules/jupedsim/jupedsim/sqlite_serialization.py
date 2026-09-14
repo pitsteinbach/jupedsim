@@ -93,7 +93,11 @@ class SqliteTrajectoryWriter(TrajectoryWriter):
             )
             cur.executemany(
                 "INSERT INTO metadata VALUES(?, ?)",
-                (("version", DATABASE_VERSION), ("fps", fps)),
+                (
+                    ("version", DATABASE_VERSION),
+                    ("fps", fps),
+                    ("every_nth_frame", self._every_nth_frame),
+                ),
             )
             cur.execute("DROP TABLE IF EXISTS geometry")
             cur.execute(

@@ -6,6 +6,9 @@ edition = "2021"
 [lib]
 crate-type = ["staticlib"]
 
+[features]
+no_halo = ["eikonal/no_halo"]
+
 [dependencies]
 eikonal = { path = "../eikonal" }
 cxx = "1.0"
@@ -15,6 +18,8 @@ num-traits = "0.2"
 rstar = "0.12"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+hdf5-metno = { version = "0.14", features = ["lzf"] }
+ndarray = "0.17"
 
 [build-dependencies]
 cxx-build = "1.0"

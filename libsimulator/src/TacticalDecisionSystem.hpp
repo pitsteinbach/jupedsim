@@ -20,15 +20,15 @@ public:
     void Run(Router& router, auto&& agents) const
     {
 
-        // #ifdef JUPEDSIM_PARALLEL_STL
-        // std::for_each(std::execution::par, agents.begin(), agents.end(), [&router](auto& agent) {
-        // if(agent.destinationId == Router::DirectSteeringId) {
-        // agent.nextTarget = router.ComputeWaypoint(agent.Position(), agent.finalTarget);
-        //} else {
-        // agent.nextTarget = router.ComputeWaypoint(agent.Position(), agent.destinationId);
-        //}
-        //});
-        // #else
+#ifdef JUPEDSIM_PARALLEL_STL
+        std::for_each(std::execution::par, agents.begin(), agents.end(), [&router](auto& agent) {
+            if(agent.destinationId == Router::DirectSteeringId) {
+                agent.nextTarget = router.ComputeWaypoint(agent.Position(), agent.finalTarget);
+            } else {
+                agent.nextTarget = router.ComputeWaypoint(agent.Position(), agent.destinationId);
+            }
+        });
+#else
         for(auto& agent : agents) {
             if(agent.destinationId == Router::DirectSteeringId) {
                 agent.nextTarget = router.ComputeWaypoint(agent.Position(), agent.finalTarget);
@@ -36,6 +36,6 @@ public:
                 agent.nextTarget = router.ComputeWaypoint(agent.Position(), agent.destinationId);
             }
         }
-        // #endif
+#endif
     }
 };

@@ -1,3 +1,4 @@
+use num_traits::Float;
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -49,10 +50,7 @@ pub fn solve(
     if USE_TILED {
         solve_tiled(speed_field, sources, width, height, cell_size)
     } else {
-        let n = width * height;
-        let mut u = vec![f64::INFINITY; n];
-        solve_serial_into(&mut u, speed_field, sources, width, height, cell_size);
-        u
+        solve_typed::<f64>(speed_field, sources, width, height, cell_size)
     }
 }
 
@@ -68,7 +66,7 @@ pub fn solve_into(
     height: usize,
     cell_size: f64,
 ) {
-    solve_serial_into(out, speed_field, sources, width, height, cell_size);
+    solve_into_typed::<f64>(out, speed_field, sources, width, height, cell_size);
 }
 
 fn solve_tiled(
@@ -131,20 +129,20 @@ fn solve_tiled(
     }
 }
 
-fn solve_serial_into(
-    out: &mut [f64],
-    speed_field: &[f64],
+fn solve_serial_into_typed<T: Float>(
+    out: &mut [T],
+    speed_field: &[T],
     sources: &[u32],
     width: usize,
     height: usize,
-    cell_size: f64,
+    cell_size: T,
 ) {
     let n = width * height;
-    out.fill(f64::INFINITY);
+    out.fill(T::infinity());
     let mut is_source = vec![false; n];
     for &s in sources {
         let idx = s as usize;
-        out[idx] = 0.0;
+        out[idx] = T::zero();
         is_source[idx] = true;
     }
 
@@ -157,14 +155,14 @@ fn solve_serial_into(
         let i = idx / width;
         let j = idx % width;
         for nb in four_neighbors(i, j, width, height) {
-            if !in_active[nb] && !is_source[nb] && speed_field[nb] > 0.0 {
+            if !in_active[nb] && !is_source[nb] && speed_field[nb] > T::zero() {
                 in_active[nb] = true;
                 current.push(nb);
             }
         }
     }
 
-    run_fim(
+    run_fim_typed(
         out,
         speed_field,
         &is_source,
@@ -175,6 +173,32 @@ fn solve_serial_into(
         &mut current,
         &mut next,
     );
+}
+
+/// Generic solve: accepts `f32` or `f64`. Returns a `Vec<T>`.
+pub fn solve_typed<T: Float>(
+    speed_field: &[T],
+    sources: &[u32],
+    width: usize,
+    height: usize,
+    cell_size: T,
+) -> Vec<T> {
+    let n = width * height;
+    let mut u = vec![T::infinity(); n];
+    solve_into_typed(&mut u, speed_field, sources, width, height, cell_size);
+    u
+}
+
+/// Allocation-free generic variant: initialises `out` to INFINITY and solves in place.
+pub fn solve_into_typed<T: Float>(
+    out: &mut [T],
+    speed_field: &[T],
+    sources: &[u32],
+    width: usize,
+    height: usize,
+    cell_size: T,
+) {
+    solve_serial_into_typed(out, speed_field, sources, width, height, cell_size);
 }
 
 /// Re-solves using a previous travel-time field (`prior`) as initial guess.
@@ -227,10 +251,15 @@ fn solve_warm_serial(
     height: usize,
     cell_size: f64,
 ) -> Vec<f64> {
-    let n = width * height;
-    let mut u = vec![f64::INFINITY; n];
-    solve_warm_serial_into(&mut u, speed_field, prior, changed_cells, sources, width, height, cell_size);
-    u
+    solve_warm_typed(
+        speed_field,
+        prior,
+        changed_cells,
+        sources,
+        width,
+        height,
+        cell_size,
+    )
 }
 
 /// Allocation-free warm-start variant: copies `prior` into `out` then re-solves in place.
@@ -245,18 +274,27 @@ pub fn solve_warm_into(
     height: usize,
     cell_size: f64,
 ) {
-    solve_warm_serial_into(out, speed_field, prior, changed_cells, sources, width, height, cell_size);
+    solve_warm_into_typed(
+        out,
+        speed_field,
+        prior,
+        changed_cells,
+        sources,
+        width,
+        height,
+        cell_size,
+    );
 }
 
-fn solve_warm_serial_into(
-    out: &mut [f64],
-    speed_field: &[f64],
-    prior: &[f64],
+fn solve_warm_serial_into_typed<T: Float>(
+    out: &mut [T],
+    speed_field: &[T],
+    prior: &[T],
     changed_cells: &[u32],
     sources: &[u32],
     width: usize,
     height: usize,
-    cell_size: f64,
+    cell_size: T,
 ) {
     let n = width * height;
     out.copy_from_slice(prior);
@@ -275,14 +313,15 @@ fn solve_warm_serial_into(
         let i = idx / width;
         let j = idx % width;
         for candidate in std::iter::once(idx).chain(four_neighbors(i, j, width, height)) {
-            if !in_active[candidate] && !is_source[candidate] && speed_field[candidate] > 0.0 {
+            if !in_active[candidate] && !is_source[candidate] && speed_field[candidate] > T::zero()
+            {
                 in_active[candidate] = true;
                 current.push(candidate);
             }
         }
     }
 
-    run_fim(
+    run_fim_typed(
         out,
         speed_field,
         &is_source,
@@ -292,6 +331,84 @@ fn solve_warm_serial_into(
         &mut in_active,
         &mut current,
         &mut next,
+    );
+
+    #[cfg(debug_assertions)]
+    {
+        let mut cold = vec![T::infinity(); n];
+        solve_serial_into_typed(&mut cold, speed_field, sources, width, height, cell_size);
+        let tol5 = T::from(5.0 * CONV_TOL).unwrap();
+        let mut max_err = T::zero();
+        let mut max_idx = 0usize;
+        for i in 0..n {
+            if cold[i].is_finite() {
+                let err = (out[i] - cold[i]).abs();
+                if err > max_err {
+                    max_err = err;
+                    max_idx = i;
+                }
+            }
+        }
+        assert!(
+            max_err <= tol5,
+            "[FIM warm] correctness check failed: max error {:.4e} at cell ({},{}) \
+             warm={:.6} cold={:.6} (threshold={:.4e})",
+            max_err.to_f64().unwrap_or(f64::INFINITY),
+            max_idx / width,
+            max_idx % width,
+            out[max_idx].to_f64().unwrap_or(f64::INFINITY),
+            cold[max_idx].to_f64().unwrap_or(f64::INFINITY),
+            tol5.to_f64().unwrap_or(f64::INFINITY),
+        );
+    }
+}
+
+/// Generic warm-start solve: copies `prior` into `out` then re-solves only
+/// the region reachable from `changed_cells`. Returns a `Vec<T>`.
+pub fn solve_warm_typed<T: Float>(
+    speed_field: &[T],
+    prior: &[T],
+    changed_cells: &[u32],
+    sources: &[u32],
+    width: usize,
+    height: usize,
+    cell_size: T,
+) -> Vec<T> {
+    let n = width * height;
+    let mut out = vec![T::infinity(); n];
+    solve_warm_into_typed(
+        &mut out,
+        speed_field,
+        prior,
+        changed_cells,
+        sources,
+        width,
+        height,
+        cell_size,
+    );
+    out
+}
+
+/// Allocation-free generic warm-start variant.
+pub fn solve_warm_into_typed<T: Float>(
+    out: &mut [T],
+    speed_field: &[T],
+    prior: &[T],
+    changed_cells: &[u32],
+    sources: &[u32],
+    width: usize,
+    height: usize,
+    cell_size: T,
+) {
+    solve_warm_serial_into_typed(
+        out,
+        speed_field,
+        prior,
+        changed_cells,
+        sources,
+        width,
+        height,
+        cell_size,
     );
 }
 
@@ -366,13 +483,13 @@ fn solve_warm_tiled(
     }
 }
 
-fn run_fim(
-    u: &mut [f64],
-    speed_field: &[f64],
+fn run_fim_typed<T: Float>(
+    u: &mut [T],
+    speed_field: &[T],
     is_source: &[bool],
     width: usize,
     height: usize,
-    cell_size: f64,
+    cell_size: T,
     in_active: &mut [bool],
     current: &mut Vec<usize>,
     next: &mut Vec<usize>,
@@ -380,6 +497,7 @@ fn run_fim(
     let t = Instant::now();
     let n = u.len();
     let seed_count = current.len();
+    let tol = T::from(CONV_TOL).unwrap();
     let mut rounds = 0u32;
     let mut total_cells_processed: usize = 0;
 
@@ -390,7 +508,7 @@ fn run_fim(
         for &idx in current.iter() {
             in_active[idx] = false;
 
-            if is_source[idx] || speed_field[idx] <= 0.0 {
+            if is_source[idx] || speed_field[idx] <= T::zero() {
                 continue;
             }
 
@@ -400,10 +518,10 @@ fn run_fim(
             let b = min_neighbor_y(u, i, j, width, height);
             let candidate = godunov_update(a, b, cell_size / speed_field[idx]);
 
-            if (candidate - u[idx]).abs() > CONV_TOL {
+            if candidate < u[idx] - tol {
                 u[idx] = candidate;
                 for nb in four_neighbors(i, j, width, height) {
-                    if !in_active[nb] && !is_source[nb] && speed_field[nb] > 0.0 {
+                    if !in_active[nb] && !is_source[nb] && speed_field[nb] > T::zero() {
                         in_active[nb] = true;
                         next.push(nb);
                     }
@@ -416,7 +534,7 @@ fn run_fim(
 
     if crate::PRINT_TIMINGS {
         println!(
-            "[FIM serial] rounds={rounds} seed={seed_count} N={n} cells={total_cells_processed} \
+            "[FIM serial cold] rounds={rounds} seed={seed_count} N={n} cells={total_cells_processed} \
              total={:.1}ms",
             t.elapsed().as_secs_f64() * 1e3
         );
@@ -645,16 +763,17 @@ fn run_fim_tiled(
 // ── Stencil helpers ───────────────────────────────────────────────────────────
 
 /// Godunov upwind update: solve (u−a)₊² + (u−b)₊² = cost²
-fn godunov_update(a: f64, b: f64, cost: f64) -> f64 {
+fn godunov_update<T: Float>(a: T, b: T, cost: T) -> T {
     let lo = a.min(b);
     let hi = a.max(b);
     let u1 = lo + cost;
     if u1 <= hi {
         return u1;
     }
-    let disc = 2.0 * cost * cost - (a - b) * (a - b);
-    if disc >= 0.0 {
-        (a + b + disc.sqrt()) / 2.0
+    let two = T::one() + T::one();
+    let disc = two * cost * cost - (a - b) * (a - b);
+    if disc >= T::zero() {
+        (a + b + disc.sqrt()) / two
     } else {
         u1
     }
@@ -688,30 +807,30 @@ fn min_nb_y_atomic(u: &[AtomicU64], i: usize, j: usize, width: usize, height: us
     up.min(down)
 }
 
-fn min_neighbor_x(u: &[f64], i: usize, j: usize, width: usize) -> f64 {
+fn min_neighbor_x<T: Float>(u: &[T], i: usize, j: usize, width: usize) -> T {
     let left = if j > 0 {
         u[i * width + j - 1]
     } else {
-        f64::INFINITY
+        T::infinity()
     };
     let right = if j + 1 < width {
         u[i * width + j + 1]
     } else {
-        f64::INFINITY
+        T::infinity()
     };
     left.min(right)
 }
 
-fn min_neighbor_y(u: &[f64], i: usize, j: usize, width: usize, height: usize) -> f64 {
+fn min_neighbor_y<T: Float>(u: &[T], i: usize, j: usize, width: usize, height: usize) -> T {
     let up = if i > 0 {
         u[(i - 1) * width + j]
     } else {
-        f64::INFINITY
+        T::infinity()
     };
     let down = if i + 1 < height {
         u[(i + 1) * width + j]
     } else {
-        f64::INFINITY
+        T::infinity()
     };
     up.min(down)
 }

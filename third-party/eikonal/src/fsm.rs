@@ -52,11 +52,12 @@ pub fn solve_into_typed<T: Float>(
     for &s in sources {
         out[s as usize] = T::zero();
     }
-    for _ in 0..2 {
-        sweep(out, speed_field, width, height, cell_size, false, false);
-        sweep(out, speed_field, width, height, cell_size, false, true);
-        sweep(out, speed_field, width, height, cell_size, true, false);
-        sweep(out, speed_field, width, height, cell_size, true, true);
+    loop {
+        let c0 = sweep(out, speed_field, width, height, cell_size, false, false);
+        let c1 = sweep(out, speed_field, width, height, cell_size, false, true);
+        let c2 = sweep(out, speed_field, width, height, cell_size, true, false);
+        let c3 = sweep(out, speed_field, width, height, cell_size, true, true);
+        if !(c0 | c1 | c2 | c3) { break; }
     }
     if crate::PRINT_TIMINGS {
         let n = width * height;
@@ -72,7 +73,8 @@ fn sweep<T: Float>(
     h: T,
     i_rev: bool,
     j_rev: bool,
-) {
+) -> bool {
+    let mut changed = false;
     let rows = iter_range(height, i_rev);
     for i in rows {
         for j in iter_range(width, j_rev) {
@@ -87,9 +89,11 @@ fn sweep<T: Float>(
             let candidate = godunov_update(a, b, cost);
             if candidate < u[idx] {
                 u[idx] = candidate;
+                changed = true;
             }
         }
     }
+    changed
 }
 
 /// Upwind Godunov update: solves (u-a)₊² + (u-b)₊² = cost²

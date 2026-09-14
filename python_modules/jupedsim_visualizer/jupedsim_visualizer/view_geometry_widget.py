@@ -53,15 +53,23 @@ class ViewGeometryWidget(QWidget):
         self._ff_toggle = QCheckBox("Floor field")
         self._ff_hint = QLabel("← click to set destination")
         self._ff_hint.setVisible(False)
+        self._arrows_toggle = QCheckBox("Gradient arrows")
+        self._arrows_toggle.setEnabled(False)
+        self._iso_toggle = QCheckBox("Isolines")
+        self._iso_toggle.setEnabled(False)
         controls.addWidget(self._ff_toggle)
         controls.addWidget(self._ff_hint)
+        controls.addWidget(self._arrows_toggle)
+        controls.addWidget(self._iso_toggle)
         controls.addStretch()
         layout.addLayout(controls)
 
         self.render_widget = RenderWidget(geo, navi, [geo], parent=self)
 
-        # Register floor field actors with the renderer
+        # Register all floor field actors with the renderer
         self.render_widget.ren.AddActor(self._ff_viz.get_actor())
+        self.render_widget.ren.AddActor(self._ff_viz.get_arrow_actor())
+        self.render_widget.ren.AddActor(self._ff_viz.get_iso_actor())
         self.render_widget.ren.AddActor2D(self._ff_viz.get_scalar_bar())
 
         # Left-click on the VTK scene sets the floor field destination
@@ -81,15 +89,26 @@ class ViewGeometryWidget(QWidget):
         reset_cam_bt.clicked.connect(self.render_widget.reset_camera)
         self.render_widget.on_hover_triangle.connect(self.hover_label.setText)
         self._ff_toggle.toggled.connect(self._on_ff_toggled)
+        self._arrows_toggle.toggled.connect(self._on_arrows_toggled)
+        self._iso_toggle.toggled.connect(self._on_iso_toggled)
 
     def _on_ff_toggled(self, checked: bool) -> None:
         self._ff_hint.setVisible(checked)
         self._ff_viz.show(checked)
-        # Disable path-drawing while the floor field overlay is active so that
-        # left-click is used exclusively for setting the destination.
+        if not checked:
+            self._arrows_toggle.setEnabled(False)
+            self._iso_toggle.setEnabled(False)
         self.render_widget.move_controller.set_navi(
             None if checked else self._navi
         )
+        self.render_widget.render()
+
+    def _on_arrows_toggled(self, checked: bool) -> None:
+        self._ff_viz.set_gradient_arrows_visible(checked)
+        self.render_widget.render()
+
+    def _on_iso_toggled(self, checked: bool) -> None:
+        self._ff_viz.set_isolines_visible(checked)
         self.render_widget.render()
 
     def _on_ff_click(self, obj, evt) -> None:
@@ -104,6 +123,8 @@ class ViewGeometryWidget(QWidget):
         x = world[0] / world[3]
         y = world[1] / world[3]
         if self._ff_viz.set_destination(x, y):
+            self._arrows_toggle.setEnabled(True)
+            self._iso_toggle.setEnabled(True)
             self.render_widget.render()
 
     def render(self):

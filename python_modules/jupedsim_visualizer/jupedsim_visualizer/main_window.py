@@ -4,7 +4,7 @@ from pathlib import Path
 
 import jupedsim as jps
 import shapely
-from jupedsim.recording import Recording
+from jupedsim.recording import open_recording
 from PySide6.QtCore import QSettings, QSize
 from PySide6.QtStateMachine import QFinalState, QState, QStateMachine
 from PySide6.QtWidgets import (
@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
 )
 
+from jupedsim_visualizer.floorfield_hdf5_widget import FloorFieldHdf5Widget
 from jupedsim_visualizer.geometry import Geometry
 from jupedsim_visualizer.replay_widget import ReplayWidget
 from jupedsim_visualizer.trajectory import Trajectory
@@ -49,6 +50,8 @@ class MainWindow(QMainWindow):
         open_wkt_act.triggered.connect(self._open_wkt)
         open_replay_act = open_menu.addAction("Open replay file")
         open_replay_act.triggered.connect(self._open_replay)
+        open_ff_act = open_menu.addAction("Open floor field HDF5")
+        open_ff_act.triggered.connect(self._open_floorfield_hdf5)
         settings_menu = menu.addMenu("Settings")
         self._show_triangulation = settings_menu.addAction("show triangulation")
         self._show_triangulation.setCheckable(True)
@@ -100,13 +103,17 @@ class MainWindow(QMainWindow):
     def _toggle_triangulation(self, state: bool) -> None:
         self.settings.setValue("show_triangulation", state)
         for idx in range(self.tabs.count()):
-            self.tabs.widget(idx).geo.show_triangulation(state)
+            tab = self.tabs.widget(idx)
+            if hasattr(tab, "geo"):
+                tab.geo.show_triangulation(state)
         self.repaint()
 
     def _toggle_grid(self, state: bool) -> None:
         self.settings.setValue("show_grid", state)
         for idx in range(self.tabs.count()):
-            self.tabs.widget(idx).render_widget.show_grid(state)
+            tab = self.tabs.widget(idx)
+            if hasattr(tab, "render_widget"):
+                tab.render_widget.show_grid(state)
         self.repaint()
 
     def _open_wkt(self):
@@ -155,14 +162,17 @@ class MainWindow(QMainWindow):
         )
         base_path = Path(str(base_path_obj))
         file, _ = QFileDialog.getOpenFileName(
-            self, caption="Open recording", dir=str(base_path)
+            self,
+            caption="Open recording",
+            dir=str(base_path),
+            filter="Recording files (*.sqlite *.db *.h5 *.hdf5);;All files (*)",
         )
         if not file:
             return
         file = Path(file)
         self.settings.setValue("files/last_replay_location", str(file.parent))
         try:
-            rec = Recording(file.as_posix())
+            rec = open_recording(file.as_posix())
             self.setUpdatesEnabled(False)
             navi = jps.RoutingEngine(rec.geometry())
             geo = Geometry(navi)
@@ -182,5 +192,40 @@ class MainWindow(QMainWindow):
                 self,
                 "Error importing simulation recording",
                 f"Error importing simulation recording:\n{e}",
+            )
+            return
+
+    def _open_floorfield_hdf5(self):
+        base_path_obj = self.settings.value(
+            "files/last_ff_hdf5_location",
+            type=str,
+            defaultValue=Path("~").expanduser(),
+        )
+        base_path = Path(str(base_path_obj))
+        file, _ = QFileDialog.getOpenFileName(
+            self,
+            caption="Open floor field HDF5",
+            dir=str(base_path),
+            filter="HDF5 files (*.h5 *.hdf5);;All files (*)",
+        )
+        if not file:
+            return
+        file = Path(file)
+        self.settings.setValue("files/last_ff_hdf5_location", str(file.parent))
+        try:
+            self.setUpdatesEnabled(False)
+            tab = FloorFieldHdf5Widget(file.as_posix(), parent=self)
+            tab_idx = self.tabs.insertTab(0, tab, file.name)
+            self.tabs.setCurrentIndex(tab_idx)
+            self.setUpdatesEnabled(True)
+            self.update()
+        except Exception as e:
+            import traceback
+
+            traceback.print_exception(e)
+            QMessageBox.critical(
+                self,
+                "Error opening floor field HDF5",
+                f"Error opening floor field HDF5:\n{e}",
             )
             return

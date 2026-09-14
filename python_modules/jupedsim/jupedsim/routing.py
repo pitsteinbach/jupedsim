@@ -228,3 +228,64 @@ class Floorfield:
             steps: number of calls between rebuilds (default 200).
         """
         self._obj.set_recompute_interval(steps)
+
+    def travel_time_gradient(self) -> _GridData:
+        """Return the Sobel-kernel gradient of the last travel-time field.
+
+        Has the same layout as :meth:`speed_field` except ``data`` is
+        interleaved ``(gx, gy)`` pairs, length ``2 * width * height``.
+        Call :meth:`compute_waypoints` at least once first.
+
+        Reshape and use with numpy::
+
+            import numpy as np
+            g = ff.travel_time_gradient()
+            grad = np.array(g["data"]).reshape(g["height"], g["width"], 2)
+            gx, gy = grad[..., 0], grad[..., 1]
+
+        The gradient points away from the destination (+∇T).  Negate for
+        the travel direction (toward the destination).
+        """
+        return self._obj.travel_time_gradient()
+
+    def write_travel_times_hdf5(self, path: str) -> None:
+        """Write the speed field and travel-time grid to an HDF5 file.
+
+        Creates two datasets in the file root:
+
+        * ``/speed_field``   – float32 [height × width]
+        * ``/travel_times``  – float32 [height × width]
+
+        Root attributes: ``origin_x``, ``origin_y``, ``cell_size``,
+        ``width``, ``height``.
+
+        Requires ``h5py`` and ``numpy``.
+
+        Arguments:
+            path: output ``.h5`` file path (overwritten if it exists).
+        """
+        import h5py
+        import numpy as np
+
+        sf = self.speed_field()
+        tt = self.travel_times()
+        w, h = sf["width"], sf["height"]
+        ox, oy = sf["origin"]
+        cs: float = sf["cell_size"]
+
+        with h5py.File(path, "w") as f:
+            f.attrs["origin_x"] = ox
+            f.attrs["origin_y"] = oy
+            f.attrs["cell_size"] = cs
+            f.attrs["width"] = w
+            f.attrs["height"] = h
+            f.create_dataset(
+                "speed_field",
+                data=np.array(sf["data"], dtype=np.float32).reshape(h, w),
+                compression="gzip",
+            )
+            f.create_dataset(
+                "travel_times",
+                data=np.array(tt["data"], dtype=np.float32).reshape(h, w),
+                compression="gzip",
+            )

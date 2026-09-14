@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LGPL-3.0-or-later
+## SPDX-License-Identifier: LGPL-3.0-or-later
 
 """This code is used in examples on jupedsim.org.
 
@@ -7,6 +7,7 @@ reservere us the right to change the code here w.o. warning. Do not use the
 code here. Use it at your own peril.
 """
 
+import pathlib
 import sqlite3
 
 import matplotlib.pyplot as plt
@@ -15,6 +16,10 @@ import pandas as pd
 import pedpy
 import plotly.graph_objects as go
 import plotly.io as pio
+from matplotlib.animation import FuncAnimation, PillowWriter
+from matplotlib.colors import to_rgb
+from matplotlib.lines import Line2D
+from matplotlib.patches import Circle
 
 # Fix for plotly 6.x wrt animations in jupyter notebooks
 pio.renderers.default = "sphinx_gallery"
@@ -52,10 +57,66 @@ def _speed_to_color(speed, min_speed, max_speed):
     return f"rgba({r * 255:.0f}, {g * 255:.0f}, {b * 255:.0f}, 0.5)"
 
 
+# Categorical palette, used when agents are colored by a category (e.g. the
+# operational model they use) instead of by speed. Slots are assigned in this
+# fixed order and never cycled.
+CATEGORY_PALETTE = (
+    "#2a78d6",  # blue
+    "#eb6834",  # orange
+    "#1baf7a",  # aqua
+    "#eda100",  # yellow
+    "#e87ba4",  # magenta
+    "#008300",  # green
+    "#4a3aa7",  # violet
+    "#e34948",  # red
+)
+UNKNOWN_CATEGORY_COLOR = "#969696"
+
+
+def _hex_to_rgba(hex_color, alpha=0.9):
+    hex_color = hex_color.lstrip("#")
+    r, g, b = (int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r}, {g}, {b}, {alpha})"
+
+
+def _build_category_colors(categories):
+    """Map each category to a palette slot, in the order given."""
+    if len(categories) > len(CATEGORY_PALETTE):
+        raise ValueError(
+            f"can color at most {len(CATEGORY_PALETTE)} categories, "
+            f"got {len(categories)}"
+        )
+    return {
+        category: color for category, color in zip(categories, CATEGORY_PALETTE)
+    }
+
+
+def _get_legend_traces(category_colors):
+    """Off-canvas markers that carry the category legend."""
+    return [
+        go.Scatter(
+            x=[None],
+            y=[None],
+            mode="markers",
+            marker=dict(size=12, color=_hex_to_rgba(color)),
+            name=str(category),
+            showlegend=True,
+            hoverinfo="none",
+        )
+        for category, color in category_colors.items()
+    ]
+
+
 def _get_line_color(disk_color):
     r, g, b, _ = [int(float(val)) for val in disk_color[5:-2].split(",")]
     brightness = (r * 299 + g * 587 + b * 114) / 1000
     return "black" if brightness > 127 else "white"
+
+
+def _contrast_color(color):
+    """Black or white, whichever is readable on top of ``color``."""
+    r, g, b = to_rgb(color)
+    return "black" if (r * 299 + g * 587 + b * 114) / 1000 > 0.5 else "white"
 
 
 def _create_orientation_line(row, line_length=0.2, color="black"):
@@ -136,7 +197,9 @@ def _get_colormap(frame_data, max_speed):
     return [scatter_trace]
 
 
-def _get_shapes_for_frame(frame_data, min_speed, max_speed):
+def _get_shapes_for_frame(
+    frame_data, min_speed, max_speed, category_colors=None
+):
     def create_shape(row):
         hover_trace = go.Scatter(
             x=[row["x"]],
@@ -171,7 +234,12 @@ def _get_shapes_for_frame(frame_data, min_speed, max_speed):
                 dummy_trace,
                 _create_orientation_line(row, color="rgba(255,255,255,0)"),
             )
-        color = _speed_to_color(row["speed"], min_speed, max_speed)
+        if category_colors is None:
+            color = _speed_to_color(row["speed"], min_speed, max_speed)
+        else:
+            color = _hex_to_rgba(
+                category_colors.get(row["category"], UNKNOWN_CATEGORY_COLOR)
+            )
         return (
             go.layout.Shape(
                 type="circle",
@@ -208,6 +276,7 @@ def _create_fig(
     width=800,
     height=800,
     title_note: str = "",
+    legend_title: str = "",
 ):
     """Creates a Plotly figure with animation capabilities.
 
@@ -228,6 +297,7 @@ def _create_fig(
         ),
     )
     fig.update_layout(
+        legend=dict(title=legend_title, itemsizing="constant"),
         updatemenus=[_get_animation_controls()],
         sliders=[_get_slider_controls(steps)],
         autosize=False,
@@ -301,6 +371,25 @@ def _get_processed_frame_data(data_df, frame_num, max_agents):
     return frame_data, agent_count
 
 
+def _prepare_data(data, radius, agent_categories):
+    """Speed, velocity, radius and (optionally) category per agent and frame."""
+    data_df = pedpy.compute_individual_speed(
+        traj_data=data,
+        frame_step=5,
+        compute_velocity=True,
+        speed_calculation=pedpy.SpeedCalculation.BORDER_SINGLE_SIDED,
+    )
+    data_df = data_df.merge(data.data, on=["id", "frame"], how="left")
+    data_df["radius"] = radius
+    category_colors = None
+    if agent_categories is not None:
+        data_df["category"] = data_df["id"].map(agent_categories)
+        category_colors = _build_category_colors(
+            list(dict.fromkeys(agent_categories.values()))
+        )
+    return data_df, category_colors
+
+
 def animate(
     data: pedpy.TrajectoryData,
     area: pedpy.WalkableArea,
@@ -310,15 +399,19 @@ def animate(
     height: int = 800,
     radius: float = 0.2,
     title_note: str = "",
+    agent_categories: dict[int, str] | None = None,
+    legend_title: str = "",
 ):
-    data_df = pedpy.compute_individual_speed(
-        traj_data=data,
-        frame_step=5,
-        compute_velocity=True,
-        speed_calculation=pedpy.SpeedCalculation.BORDER_SINGLE_SIDED,
-    )
-    data_df = data_df.merge(data.data, on=["id", "frame"], how="left")
-    data_df["radius"] = radius
+    """Animate the trajectories.
+
+    Arguments:
+        agent_categories: Optional mapping of agent id to a category name,
+            e.g. the operational model the agent was simulated with. If given,
+            agents are colored by category (legend) instead of by speed
+            (colorbar). Agent ids not in the mapping are drawn grey.
+        legend_title: Title of the category legend.
+    """
+    data_df, category_colors = _prepare_data(data, radius, agent_categories)
     min_speed = data_df["speed"].min()
     max_speed = data_df["speed"].max()
     max_agents = data_df.groupby("frame").size().max()
@@ -333,19 +426,24 @@ def animate(
         initial_shapes,
         initial_hover_trace,
         initial_arrows,
-    ) = _get_shapes_for_frame(initial_frame_data, min_speed, max_speed)
-    color_map_trace = _get_colormap(initial_frame_data, max_speed)
+    ) = _get_shapes_for_frame(
+        initial_frame_data, min_speed, max_speed, category_colors
+    )
+    if category_colors is None:
+        legend_traces = _get_colormap(initial_frame_data, max_speed)
+    else:
+        legend_traces = _get_legend_traces(category_colors)
     for frame_num in selected_frames:
         frame_data, agent_count = _get_processed_frame_data(
             data_df, frame_num, max_agents
         )
         shapes, hover_traces, arrows = _get_shapes_for_frame(
-            frame_data, min_speed, max_speed
+            frame_data, min_speed, max_speed, category_colors
         )
         title = f"<b>{title_note + '  |  ' if title_note else ''}Number of Agents: {agent_count}</b>"
         frame_name = str(int(frame_num))
         frame = go.Frame(
-            data=geometry_traces + hover_traces,
+            data=geometry_traces + legend_traces + hover_traces,
             name=frame_name,
             layout=go.Layout(
                 shapes=shapes + arrows,
@@ -374,7 +472,7 @@ def animate(
         initial_shapes,
         initial_arrows,
         initial_hover_trace,
-        color_map_trace,
+        legend_traces,
         geometry_traces,
         frames,
         steps,
@@ -382,4 +480,131 @@ def animate(
         width=width,
         height=height,
         title_note=title_note,
+        legend_title=legend_title,
     )
+
+
+def animate_to_gif(
+    data: pedpy.TrajectoryData,
+    area: pedpy.WalkableArea,
+    output_file: str | pathlib.Path,
+    *,
+    every_nth_frame: int = 5,
+    fps: int = 10,
+    radius: float = 0.2,
+    width: float = 8.0,
+    height: float = 8.0,
+    dpi: int = 100,
+    title_note: str = "",
+    agent_categories: dict[int, str] | None = None,
+    legend_title: str = "",
+) -> pathlib.Path:
+    """Write the animation to an animated GIF, e.g. for use in slides.
+
+    Renders with matplotlib -- same colors as :func:`animate`, but a plain
+    image sequence instead of an interactive plotly figure.
+
+    Arguments:
+        output_file: Path of the GIF to write.
+        every_nth_frame: Only every n-th simulation frame becomes a GIF frame.
+        fps: Frames per second of the GIF.
+        agent_categories: Optional mapping of agent id to a category name. If
+            given, agents are colored by category (legend) instead of by speed
+            (colorbar).
+        legend_title: Title of the category legend.
+
+    Returns:
+        The path of the written GIF.
+    """
+    data_df, category_colors = _prepare_data(data, radius, agent_categories)
+    min_speed = data_df["speed"].min()
+    max_speed = data_df["speed"].max()
+    max_agents = data_df.groupby("frame").size().max()
+    selected_frames = data_df["frame"].unique()[::every_nth_frame]
+
+    fig, axes = plt.subplots(figsize=(width, height), dpi=dpi)
+    pedpy.plot_walkable_area(walkable_area=area, axes=axes)
+    minx, miny, maxx, maxy = area.bounds
+    axes.set_xlim(minx - 0.5, maxx + 0.5)
+    axes.set_ylim(miny - 0.5, maxy + 0.5)
+    axes.set_xlabel("x/m")
+    axes.set_ylabel("y/m")
+    axes.set_aspect("equal")
+
+    if category_colors is None:
+        norm = plt.Normalize(vmin=min_speed, vmax=max_speed)
+        fig.colorbar(
+            plt.cm.ScalarMappable(norm=norm, cmap=plt.cm.jet_r),
+            ax=axes,
+            label="Speed [m/s]",
+            fraction=0.046,
+            pad=0.04,
+        )
+    else:
+        axes.legend(
+            handles=[
+                Line2D(
+                    [],
+                    [],
+                    marker="o",
+                    linestyle="none",
+                    markersize=10,
+                    color=color,
+                    label=str(category),
+                )
+                for category, color in category_colors.items()
+            ],
+            title=legend_title or None,
+            loc="upper left",
+        )
+
+    # One reusable disk and orientation line per agent, hidden while unused.
+    disks = []
+    orientations = []
+    for _ in range(max_agents):
+        disk = Circle((0, 0), radius, alpha=0.9, visible=False)
+        axes.add_patch(disk)
+        disks.append(disk)
+        orientations.append(axes.plot([], [], linewidth=1.5, visible=False)[0])
+
+    def draw_frame(frame_num):
+        frame_data = data_df[data_df["frame"] == frame_num]
+        for disk, orientation, (_, row) in zip(
+            disks, orientations, frame_data.iterrows()
+        ):
+            if category_colors is None:
+                color = plt.cm.jet_r(
+                    (row["speed"] - min_speed) / (max_speed - min_speed)
+                )
+            else:
+                color = category_colors.get(
+                    row["category"], UNKNOWN_CATEGORY_COLOR
+                )
+            disk.set(center=(row["x"], row["y"]), color=color, visible=True)
+            norm_v = np.hypot(row["v_x"], row["v_y"])
+            if norm_v > 0:
+                orientation.set_data(
+                    [row["x"], row["x"] + radius * row["v_x"] / norm_v],
+                    [row["y"], row["y"] + radius * row["v_y"] / norm_v],
+                )
+            else:
+                orientation.set_data([row["x"]], [row["y"]])
+            orientation.set(color=_contrast_color(color), visible=True)
+        for disk, orientation in zip(
+            disks[len(frame_data) :], orientations[len(frame_data) :]
+        ):
+            disk.set_visible(False)
+            orientation.set_visible(False)
+        axes.set_title(
+            f"{title_note + '  |  ' if title_note else ''}"
+            f"Number of Agents: {len(frame_data)}"
+        )
+        return [*disks, *orientations]
+
+    animation = FuncAnimation(
+        fig, draw_frame, frames=selected_frames, blit=False
+    )
+    output_file = pathlib.Path(output_file)
+    animation.save(output_file, writer=PillowWriter(fps=fps))
+    plt.close(fig)
+    return output_file

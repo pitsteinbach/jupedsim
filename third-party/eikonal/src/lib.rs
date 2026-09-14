@@ -8,7 +8,7 @@ pub mod fsm_k4;
 /// Set to `true` to print per-solver timing breakdowns; `false` for silent operation.
 /// This is a compile-time constant: when `false` the dead branches are eliminated
 /// by the compiler even in debug builds.
-pub const PRINT_TIMINGS: bool = true;
+pub const PRINT_TIMINGS: bool = false;
 
 /// Set to `true` to enable early termination in the GPU FIM solver: after each
 /// 64-round batch the active-tile count is read back and, if zero, no further
@@ -810,7 +810,7 @@ pub fn fim_batch_cold_ms_f32(
     }
     (0..n_dests).into_par_iter().for_each(|i| {
         let out = unsafe { std::slice::from_raw_parts_mut(out_ptrs[i] as *mut f32, n) };
-        fsm::solve_into_typed(
+        fim::solve_into_typed::<f32>(
             out,
             speed,
             &sources_flat[src_offsets[i] as usize..src_offsets[i + 1] as usize],
@@ -841,6 +841,7 @@ pub fn fim_batch_warm_ms_f32(
         println!("GPU warm FIM batch path FP32");
         fim_gpu_wgpu::solve_warm_ms_f32(
             out_ptrs,
+            prior_ptrs,
             n,
             speed,
             changed,
@@ -852,18 +853,160 @@ pub fn fim_batch_warm_ms_f32(
         );
         return;
     }
-    // CPU: cold re-solve with FSM (prior_ptrs unused — f32 has no CPU warm FIM).
-    let _ = prior_ptrs;
     (0..n_dests).into_par_iter().for_each(|i| {
         let out = unsafe { std::slice::from_raw_parts_mut(out_ptrs[i] as *mut f32, n) };
-        println!("CPU warm FSM batch path FP32");
-        fsm::solve_into_typed(
+        let prior = unsafe { std::slice::from_raw_parts(prior_ptrs[i] as *const f32, n) };
+        fim::solve_warm_into_typed::<f32>(
             out,
             speed,
+            prior,
+            changed,
             &sources_flat[src_offsets[i] as usize..src_offsets[i + 1] as usize],
             w,
             h,
             cs,
         );
     });
+}
+
+// ── Non-blocking dispatch entry points ───────────────────────────────────────
+//
+// Return `true` when GPU async dispatch happened (caller must invoke the
+// matching `fim_collect_*` after `readback_delay` iterations).
+// Return `false` when the solver fell back to a synchronous CPU path.
+
+pub fn fim_batch_dispatch_warm_ms_f32(
+    out_ptrs: &[usize],
+    prior_ptrs: &[usize],
+    n: usize,
+    speed: &[f32],
+    changed: &[u32],
+    sources_flat: &[u32],
+    src_offsets: &[u32],
+    w: usize,
+    h: usize,
+    cs: f32,
+) -> bool {
+    let n_dests = out_ptrs.len();
+    if USE_GPU_WGPU && fim_gpu_wgpu::fits_in_gpu(n_dests, n) {
+        fim_gpu_wgpu::dispatch_warm_ms_f32(
+            out_ptrs,
+            prior_ptrs,
+            n,
+            speed,
+            changed,
+            sources_flat,
+            src_offsets,
+            w,
+            h,
+            cs,
+        );
+        return true;
+    }
+    fim_batch_warm_ms_f32(
+        out_ptrs,
+        prior_ptrs,
+        n,
+        speed,
+        changed,
+        sources_flat,
+        src_offsets,
+        w,
+        h,
+        cs,
+    );
+    false
+}
+
+pub fn fim_batch_dispatch_cold_ms_f32(
+    out_ptrs: &[usize],
+    n: usize,
+    speed: &[f32],
+    sources_flat: &[u32],
+    src_offsets: &[u32],
+    w: usize,
+    h: usize,
+    cs: f32,
+) -> bool {
+    let n_dests = out_ptrs.len();
+    if USE_GPU_WGPU && fim_gpu_wgpu::fits_in_gpu(n_dests, n) {
+        fim_gpu_wgpu::dispatch_cold_ms_f32(out_ptrs, n, speed, sources_flat, src_offsets, w, h, cs);
+        return true;
+    }
+    fim_batch_cold_ms_f32(out_ptrs, n, speed, sources_flat, src_offsets, w, h, cs);
+    false
+}
+
+pub fn fim_batch_dispatch_warm_ms(
+    out_ptrs: &[usize],
+    prior_ptrs: &[usize],
+    n: usize,
+    speed: &[f64],
+    changed: &[u32],
+    sources_flat: &[u32],
+    src_offsets: &[u32],
+    w: usize,
+    h: usize,
+    cs: f64,
+) -> bool {
+    let n_dests = out_ptrs.len();
+    if USE_GPU_WGPU && fim_gpu_wgpu::fits_in_gpu(n_dests, n) {
+        fim_gpu_wgpu::dispatch_warm_ms(
+            out_ptrs,
+            prior_ptrs,
+            n,
+            speed,
+            changed,
+            sources_flat,
+            src_offsets,
+            w,
+            h,
+            cs,
+        );
+        return true;
+    }
+    fim_batch_warm_ms(
+        out_ptrs,
+        prior_ptrs,
+        n,
+        speed,
+        changed,
+        sources_flat,
+        src_offsets,
+        w,
+        h,
+        cs,
+    );
+    false
+}
+
+pub fn fim_batch_dispatch_cold_ms(
+    out_ptrs: &[usize],
+    n: usize,
+    speed: &[f64],
+    sources_flat: &[u32],
+    src_offsets: &[u32],
+    w: usize,
+    h: usize,
+    cs: f64,
+) -> bool {
+    let n_dests = out_ptrs.len();
+    if USE_GPU_WGPU && fim_gpu_wgpu::fits_in_gpu(n_dests, n) {
+        fim_gpu_wgpu::dispatch_cold_ms(out_ptrs, n, speed, sources_flat, src_offsets, w, h, cs);
+        return true;
+    }
+    fim_batch_cold_ms(out_ptrs, n, speed, sources_flat, src_offsets, w, h, cs);
+    false
+}
+
+pub fn fim_collect_f32(w: usize, h: usize) {
+    if USE_GPU_WGPU {
+        fim_gpu_wgpu::try_collect_pending(w, h);
+    }
+}
+
+pub fn fim_collect(w: usize, h: usize) {
+    if USE_GPU_WGPU {
+        fim_gpu_wgpu::try_collect_pending(w, h);
+    }
 }

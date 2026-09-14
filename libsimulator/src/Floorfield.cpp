@@ -154,7 +154,8 @@ void Floorfield<Scalar>::UpdateDensity(std::span<const Point> positions)
 template <typename Scalar>
 void Floorfield<Scalar>::PrecomputeDestinations(
     std::span<const size_t> /*ids*/,
-    std::span<const Point> points)
+    std::span<const Point> points,
+    uint64_t simIteration)
 {
     std::vector<double> xy;
     xy.reserve(points.size() * 2);
@@ -162,7 +163,7 @@ void Floorfield<Scalar>::PrecomputeDestinations(
         xy.push_back(p.x);
         xy.push_back(p.y);
     }
-    _inner->precompute_destinations(rust::Slice<const double>{xy.data(), xy.size()});
+    _inner->precompute_destinations(rust::Slice<const double>{xy.data(), xy.size()}, simIteration);
 }
 
 // ── IsRoutable ────────────────────────────────────────────────────────────────
@@ -258,6 +259,12 @@ std::vector<double> Floorfield<Scalar>::DynamicSpeedField() const
 }
 
 template <typename Scalar>
+std::vector<double> Floorfield<Scalar>::TravelTimeGradient() const
+{
+    return rustVecToStd(_inner->get_travel_time_gradient());
+}
+
+template <typename Scalar>
 void Floorfield<Scalar>::SetSolver(EikonalSolver s)
 {
     _inner->set_solver(static_cast<uint8_t>(s));
@@ -273,6 +280,18 @@ template <typename Scalar>
 void Floorfield<Scalar>::SetRecomputeInterval(int steps)
 {
     _inner->set_recompute_interval(steps);
+}
+
+template <typename Scalar>
+void Floorfield<Scalar>::ConfigureHdf5Output(const std::string& path, uint32_t everyN)
+{
+    _inner->configure_hdf5_output(rust::Str(path.data(), path.size()), everyN);
+}
+
+template <typename Scalar>
+void Floorfield<Scalar>::CloseHdf5Output()
+{
+    _inner->close_hdf5_output();
 }
 
 // ── Explicit instantiations ───────────────────────────────────────────────────
