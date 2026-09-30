@@ -35,7 +35,7 @@ void init_agent(py::module_& m)
                 [](const GenericAgent& agent) { return agent.location; }, py::keep_alive<0, 1>()))
         .def_property_readonly(
             "final_target",
-            [](const GenericAgent& agent) { return intoTuple(agent.finalTarget.xy()); })
+            [](const GenericAgent& agent) { return intoTuple(agent.finalTarget.anchor.xy()); })
         .def_property_readonly(
             "next_target", [](const GenericAgent& agent) { return intoTuple(agent.nextTarget); })
         .def_property_readonly(

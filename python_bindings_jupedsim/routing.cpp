@@ -2,6 +2,7 @@
 #include "Geometry/Geometry.hpp"
 #include "Geometry/Location.hpp"
 #include "Geometry/Validation.hpp"
+#include "HybridRoutingEngine.hpp"
 #include "SimulationError.hpp"
 #include "SurfaceMeshShortestPathRoutingEngine.hpp"
 #include "type_casters.hpp"
@@ -32,8 +33,12 @@ void init_routing(py::module_& m)
 
     py::class_<RoutingEngine>(m, "RoutingEngine")
         .def("is_valid_location", &RoutingEngine::IsValidLocation)
-        .def("get_shortest_path", &RoutingEngine::GetShortestPath)
-        .def("get_orientation", &RoutingEngine::GetOrientation)
+        .def(
+            "get_shortest_path",
+            py::overload_cast<const Point3D&, const Point3D&>(&RoutingEngine::GetShortestPath))
+        .def(
+            "get_orientation",
+            py::overload_cast<const Point3D&, const Point3D&>(&RoutingEngine::GetOrientation))
         .def("wall_clearance", &RoutingEngine::WallClearance);
 
     py::class_<SurfaceMeshShortestPathRoutingEngine, RoutingEngine>(
@@ -45,5 +50,16 @@ void init_routing(py::module_& m)
                 return std::make_unique<SurfaceMeshShortestPathRoutingEngine>(geometry);
             }),
             py::arg("geometry"),
+            py::keep_alive<1, 2>());
+
+    // One id space over the routing backends: geodesics for points, areas to their anchors.
+    py::class_<HybridRoutingEngine, RoutingEngine>(m, "HybridRoutingEngine")
+        .def(
+            py::init([](const Geometry& geometry, double wall_clearance) {
+                return std::make_unique<HybridRoutingEngine>(geometry, wall_clearance);
+            }),
+            py::arg("geometry"),
+            py::kw_only(),
+            py::arg("wall_clearance") = 0.2,
             py::keep_alive<1, 2>());
 }

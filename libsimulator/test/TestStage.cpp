@@ -6,6 +6,24 @@
 #include "TestCommon.hpp"
 #include "gtest/gtest.h"
 
+namespace
+{
+/// A stage target for stages tested on their own: no routing engine hands out an id.
+StageTarget Unrouted(const Location& location)
+{
+    return {DestinationId{}, location};
+}
+
+std::vector<StageTarget> Unrouted(const std::vector<Location>& locations)
+{
+    std::vector<StageTarget> targets{};
+    for(const auto& location : locations) {
+        targets.push_back(Unrouted(location));
+    }
+    return targets;
+}
+} // namespace
+
 class StagesTests : public ::testing::Test
 {
 public:
@@ -41,7 +59,7 @@ public:
 TEST_F(StagesTests, NotifiableWaitingSetTargetIsCorrect)
 {
     std::vector<Point> waitingPoints = {{-9, -9}, {9, -9}, {9, 9}, {-9, 9}};
-    NotifiableWaitingSet waitingSet(AllAt(waitingPoints));
+    NotifiableWaitingSet waitingSet(Unrouted(AllAt(waitingPoints)));
 
     // Each agent gets the next target of the provided waiting points until all positions are
     // occupied
@@ -49,7 +67,7 @@ TEST_F(StagesTests, NotifiableWaitingSetTargetIsCorrect)
         GenericAgent agent = AgentAt(waitingPoints[i], waitingSet.Id());
         neighborhoodSearch.AddAgent(agent);
 
-        ASSERT_EQ(waitingSet.Target(agent).xy(), waitingPoints[i]);
+        ASSERT_EQ(waitingSet.Target(agent).anchor.xy(), waitingPoints[i]);
         EnvironmentQuery envQuery(*geometry, neighborhoodSearch);
         waitingSet.Update(envQuery);
     }
@@ -58,7 +76,7 @@ TEST_F(StagesTests, NotifiableWaitingSetTargetIsCorrect)
     for(size_t i = 0; i < 2; ++i) {
         GenericAgent agentToLastWaitingSetPos = AgentAt(Point{}, waitingSet.Id());
         neighborhoodSearch.AddAgent(agentToLastWaitingSetPos);
-        ASSERT_EQ(waitingSet.Target(agentToLastWaitingSetPos).xy(), waitingPoints.back());
+        ASSERT_EQ(waitingSet.Target(agentToLastWaitingSetPos).anchor.xy(), waitingPoints.back());
     }
 }
 
@@ -84,7 +102,7 @@ public:
 
 TEST_F(StagesOnTwoStoreys, WaypointIsReachedOnlyFromItsOwnFloor)
 {
-    Waypoint waypoint(At({5, 5}, 3.0), 1.0);
+    Waypoint waypoint(Unrouted(At({5, 5}, 3.0)), 1.0);
 
     EXPECT_FALSE(waypoint.IsCompleted(AgentAt({5, 5}, 0.0, waypoint.Id())));
     EXPECT_TRUE(waypoint.IsCompleted(AgentAt({5, 5}, 3.0, waypoint.Id())));
@@ -93,9 +111,9 @@ TEST_F(StagesOnTwoStoreys, WaypointIsReachedOnlyFromItsOwnFloor)
 TEST_F(StagesOnTwoStoreys, PassingOverOrUnderAnExitDoesNotTakeIt)
 {
     std::vector<GenericAgent::ID> removed{};
-    const Polygon area{std::vector<Point>{{4, 4}, {6, 4}, {6, 6}, {4, 6}}};
-    Exit lower(area, At({5, 5}, 0.0), removed);
-    Exit upper(area, At({5, 5}, 3.0), removed);
+    const Poly area = Polygon{std::vector<Point>{{4, 4}, {6, 4}, {6, 6}, {4, 6}}};
+    Exit lower(geometry->split_into_region_pieces(area, 0.0), Unrouted(At({5, 5}, 0.0)), removed);
+    Exit upper(geometry->split_into_region_pieces(area, 3.0), Unrouted(At({5, 5}, 3.0)), removed);
 
     EXPECT_FALSE(lower.IsCompleted(AgentAt({5, 5}, 3.0, lower.Id())));
     EXPECT_FALSE(upper.IsCompleted(AgentAt({5, 5}, 0.0, upper.Id())));
@@ -108,7 +126,7 @@ TEST_F(StagesOnTwoStoreys, PassingOverOrUnderAnExitDoesNotTakeIt)
 
 TEST_F(StagesOnTwoStoreys, WaitingSetIsCompletedOnlyOnItsOwnFloor)
 {
-    NotifiableWaitingSet waitingSet(std::vector<Location>{At({5, 5}, 3.0)});
+    NotifiableWaitingSet waitingSet(Unrouted(std::vector<Location>{At({5, 5}, 3.0)}));
     waitingSet.State(WaitingSetState::Inactive);
 
     EXPECT_FALSE(waitingSet.IsCompleted(AgentAt({5, 5}, 0.0, waitingSet.Id())));
@@ -117,7 +135,7 @@ TEST_F(StagesOnTwoStoreys, WaitingSetIsCompletedOnlyOnItsOwnFloor)
 
 TEST_F(StagesOnTwoStoreys, QueueEnqueuesOnlyAgentsOnItsOwnFloor)
 {
-    NotifiableQueue queue(std::vector<Location>{At({5, 5}, 3.0)});
+    NotifiableQueue queue(Unrouted(std::vector<Location>{At({5, 5}, 3.0)}));
     NeighborhoodSearch<GenericAgent> search{5.0};
     const EnvironmentQuery query{*geometry, search};
 
@@ -136,7 +154,7 @@ TEST_F(StagesOnTwoStoreys, QueueEnqueuesOnlyAgentsOnItsOwnFloor)
 
 TEST_F(StagesOnTwoStoreys, WaitingSetSeatsOnlyAgentsOnItsOwnFloor)
 {
-    NotifiableWaitingSet waitingSet(std::vector<Location>{At({5, 5}, 3.0)});
+    NotifiableWaitingSet waitingSet(Unrouted(std::vector<Location>{At({5, 5}, 3.0)}));
     NeighborhoodSearch<GenericAgent> search{5.0};
     const EnvironmentQuery query{*geometry, search};
 
@@ -155,12 +173,12 @@ TEST_F(StagesOnTwoStoreys, WaitingSetSeatsOnlyAgentsOnItsOwnFloor)
 
 TEST_F(StagesOnTwoStoreys, TargetCarriesTheFloorItIsOn)
 {
-    Waypoint upper(At({5, 5}, 3.0), 1.0);
-    Waypoint lower(At({5, 5}, 0.0), 1.0);
+    Waypoint upper(Unrouted(At({5, 5}, 3.0)), 1.0);
+    Waypoint lower(Unrouted(At({5, 5}, 0.0)), 1.0);
     const auto agent = AgentAt({1, 1}, 0.0, upper.Id());
 
-    EXPECT_DOUBLE_EQ(upper.Target(agent).z(), 3.0);
-    EXPECT_DOUBLE_EQ(lower.Target(agent).z(), 0.0);
+    EXPECT_DOUBLE_EQ(upper.Target(agent).anchor.z(), 3.0);
+    EXPECT_DOUBLE_EQ(lower.Target(agent).anchor.z(), 0.0);
 }
 
 TEST_F(StagesOnTwoStoreys, DirectSteeringHandsBackWhereTheAgentWasSteered)
@@ -168,10 +186,10 @@ TEST_F(StagesOnTwoStoreys, DirectSteeringHandsBackWhereTheAgentWasSteered)
     DirectSteering steering{};
 
     auto agent = AgentAt({1, 1}, 0.0, steering.Id());
-    agent.finalTarget = At({5, 5}, 3.0);
+    agent.finalTarget = Unrouted(At({5, 5}, 3.0));
 
-    EXPECT_EQ(steering.Target(agent).xy(), Point(5, 5));
-    EXPECT_DOUBLE_EQ(steering.Target(agent).z(), 3.0);
+    EXPECT_EQ(steering.Target(agent).anchor.xy(), Point(5, 5));
+    EXPECT_DOUBLE_EQ(steering.Target(agent).anchor.z(), 3.0);
 }
 
 TEST(StagesOnAStair, WaypointIsReachedFromTheStairItStandsOn)
@@ -179,7 +197,7 @@ TEST(StagesOnAStair, WaypointIsReachedFromTheStairItStandsOn)
     // A stair climbing 3 m over 5 m: an agent 0.8 m short of the waypoint in plan is
     // half a metre below it.
     const auto geometry = test_geometries::two_levels_with_stair();
-    Waypoint waypoint(*geometry->get_location(12.5, 2.0, 1.5), 1.0);
+    Waypoint waypoint(Unrouted(*geometry->get_location(12.5, 2.0, 1.5)), 1.0);
 
     const GenericAgent agent(
         GenericAgent::ID::Invalid,

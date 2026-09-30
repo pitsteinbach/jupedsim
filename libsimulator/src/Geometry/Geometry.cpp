@@ -4,8 +4,12 @@
 #include "GeometricFunctions.hpp"
 #include "Geometry/BoundaryIndex.hpp"
 #include "LineSegment.hpp"
+#include "Polygon.hpp"
+#include "SimulationError.hpp"
 
+#include <CGAL/Boolean_set_operations_2.h>
 #include <CGAL/mark_domain_in_triangulation.h>
+#include <boost/iterator/function_output_iterator.hpp>
 #include <boost/range/iterator_range.hpp>
 
 #include <algorithm>
@@ -16,6 +20,7 @@
 #include <iterator>
 #include <limits>
 #include <map>
+#include <queue>
 #include <set>
 #include <utility>
 #include <variant>
@@ -208,4 +213,89 @@ std::vector<std::array<std::size_t, 3>> Geometry::triangles() const
         out.push_back(tri);
     }
     return out;
+}
+
+std::vector<AreaPiece> Geometry::split_into_region_pieces(const Poly& p, double z_hint) const
+{
+    const auto c = Polygon(p).Centroid();
+    const auto seed = get_location(c.x, c.y, z_hint);
+    if(!seed) {
+        throw SimulationError("Area centroid {} not on walkable surface.", c);
+    }
+    const auto* g = region_graph_2d();
+    if(!g) {
+        // No footprints to cut along: keep the polygon whole.
+        return {AreaPiece{PolyWithHoles(p), seed->region()}};
+    }
+
+    std::vector<AreaPiece> pieces{};
+    // define jamba function to add pieces of a region to the pieces vector
+    // we use a jambda function to add the polygon and the region id to the pieces vector
+    const auto add_pieces_of = [&](std::size_t r) {
+        CGAL::intersection(
+            (*g)[r], p, boost::make_function_output_iterator([&pieces, r](PolyWithHoles&& piece) {
+                pieces.push_back(AreaPiece{std::move(piece), r});
+            }));
+    };
+
+    std::vector<bool> seen(boost::num_vertices(*g), false);
+    std::queue<std::size_t> todo;
+    todo.push(seed->region());
+    seen[seed->region()] = true;
+    while(!todo.empty()) {
+        const auto r = todo.front();
+        todo.pop();
+        add_pieces_of(r);
+        for(auto e : boost::make_iterator_range(boost::out_edges(r, *g))) {
+            const auto n = boost::target(e, *g);
+            if(!seen[n] && CGAL::do_intersect((*g)[n], p)) {
+                seen[n] = true;
+                todo.push(n);
+            }
+        }
+    }
+    return pieces;
+}
+
+namespace
+{
+bool strictly_inside(const PolyWithHoles& area, const Point2D& p)
+{
+    if(area.outer_boundary().bounded_side(p) != CGAL::ON_BOUNDED_SIDE) {
+        return false;
+    }
+    return std::none_of(area.holes_begin(), area.holes_end(), [&p](const Poly& hole) {
+        return hole.bounded_side(p) != CGAL::ON_UNBOUNDED_SIDE;
+    });
+}
+} // namespace
+
+Location Geometry::anchor_of(const AreaPiece& piece) const
+{
+    const auto& outer = piece.polygon.outer_boundary();
+    if(outer.is_empty()) {
+        throw SimulationError("Empty area piece in region {}.", piece.region);
+    }
+
+    // Candidates, best first: the centroid, then the centre of each corner triangle - some
+    // corner of a simple polygon is an ear, whose triangle lies inside - then a vertex.
+    std::vector<Point2D> candidates{};
+    candidates.reserve(outer.size() + 2);
+    const auto c = Polygon(outer).Centroid();
+    candidates.emplace_back(c.x, c.y);
+    const auto n = outer.size();
+    for(std::size_t i = 0; i < n; ++i) {
+        candidates.push_back(CGAL::centroid(outer[(i + n - 1) % n], outer[i], outer[(i + 1) % n]));
+    }
+    const auto first = std::find_if(candidates.begin(), candidates.end(), [&](const auto& p) {
+        return strictly_inside(piece.polygon, p);
+    });
+    const Point2D xy = first != candidates.end() ? *first : outer[0];
+
+    const auto on = locate_in_region(piece.region, xy);
+    if(on.face == SurfaceMesh::null_face()) {
+        throw SimulationError(
+            "Area piece point {} is not on region {}.", Point{xy.x(), xy.y()}, piece.region);
+    }
+    return Location{this, Point{xy.x(), xy.y()}, piece.region, on.face, on.point.z()};
 }

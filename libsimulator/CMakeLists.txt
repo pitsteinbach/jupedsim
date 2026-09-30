@@ -14,6 +14,8 @@ target_sources(simulator PRIVATE
     src/Ellipse.cpp
     src/Ellipse.hpp
     src/GenericAgent.hpp
+    src/HybridRoutingEngine.cpp
+    src/HybridRoutingEngine.hpp
     src/GeometricFunctions.hpp
     src/Geometry/BoundaryIndex.cpp
     src/Geometry/BoundaryIndex.hpp
@@ -111,6 +113,7 @@ if (BUILD_TESTS)
         test/TestCustomModel.cpp
         test/TestGenericAgentFormatter.cpp
         test/TestGeometry.cpp
+        test/TestHybridRoutingEngine.cpp
         test/TestJourney.cpp
         test/TestLineSegment.cpp
         test/TestLocation.cpp

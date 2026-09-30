@@ -4,6 +4,7 @@
 #include "OperationalModels/OperationalModelState.hpp"
 #include "OperationalModels/OperationalModelType.hpp"
 #include "Point.hpp"
+#include "RoutingEngine.hpp"
 #include "UniqueID.hpp"
 #include "Visitor.hpp"
 
@@ -14,6 +15,13 @@
 #include <utility>
 class Journey;
 class BaseStage;
+
+/// Where an agent is heading: the destination routes lead to, and a point of it on the surface
+/// (reported to users, and where direct steering puts the target).
+struct StageTarget {
+    DestinationId destination;
+    Location anchor;
+};
 
 struct GenericAgent {
     using ID = jps::UniqueID<GenericAgent>;
@@ -27,7 +35,7 @@ struct GenericAgent {
 
     // This is evaluated by the "operational level"
     Point nextTarget{};
-    Location finalTarget;
+    StageTarget finalTarget;
 
     OperationalModelState state{};
 
@@ -41,7 +49,7 @@ struct GenericAgent {
         , journeyId(journeyId_)
         , stageId(stageId_)
         , location(location_)
-        , finalTarget(location_)
+        , finalTarget{DestinationId{}, location_}
         , state(std::move(state_))
     {
     }
@@ -95,7 +103,7 @@ struct fmt::formatter<GenericAgent> {
                     agent.journeyId,
                     agent.stageId,
                     agent.nextTarget,
-                    agent.finalTarget.xy(),
+                    agent.finalTarget.anchor.xy(),
                     agent.location.xy(),
                     m);
             },

@@ -120,6 +120,28 @@ public:
 
     const RegionSplit& region_split() const { return _regionSplit; }
 
+    /// The exact 2D footprint of every region and the seams between them, as authored.
+    /// `nullptr` unless the geometry was built by `WalkableSurface`.
+    const RegionGraph2D* region_graph_2d() const { return _regionGraph2D.get(); }
+
+    const PolyWithHoles& region_polygon(std::size_t id) const
+    {
+        assert(_regionGraph2D && "region_polygon() only available for WalkableSurface");
+        return (*_regionGraph2D)[id];
+    }
+
+    // -- Stage System API -------------------------------------------------------
+
+    /// Cut @p p along the region footprints into pieces that each lie in one region. The
+    /// region under @p p's centroid nearest to @p z_hint seeds the search; regions joined to it
+    /// by seams inside @p p follow. A geometry without a 2D region graph (built from a raw
+    /// mesh) is not cut: @p p becomes a single piece of the seed region.
+    std::vector<AreaPiece> split_into_region_pieces(const Poly& p, double z_hint) const;
+
+    /// A point of @p piece on the surface of its region: the centroid when it lies inside the
+    /// piece, else a point inside one of its corners, else its first vertex.
+    Location anchor_of(const AreaPiece& piece) const;
+
     // -- Viewer API -----------------------------------------------------------
 
     /// Vertex coordinates (x, y, z), indexable 0..n-1.

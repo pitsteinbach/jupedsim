@@ -20,7 +20,43 @@ SurfaceMeshShortestPathRoutingEngine::SurfaceMeshShortestPathRoutingEngine(
 {
 }
 
-bool SurfaceMeshShortestPathRoutingEngine::IsValidLocation(const RoutingTarget& loc) const
+DestinationId SurfaceMeshShortestPathRoutingEngine::add(std::vector<Point3D> sources)
+{
+    _destinations.push_back({std::move(sources)});
+    return DestinationId{_destinations.size() - 1};
+}
+
+DestinationId SurfaceMeshShortestPathRoutingEngine::AddDestination(const Point3D& point)
+{
+    if(const auto it = _pointIds.find(point); it != _pointIds.end()) {
+        return it->second;
+    }
+    // Keep the exact (x, y) the caller asked for, at the height of the surface there.
+    const auto below = on_surface(point, "target");
+    const auto id = add({Point3D{point.x(), point.y(), below.point.z()}});
+    _pointIds.emplace(point, id);
+    return id;
+}
+
+DestinationId SurfaceMeshShortestPathRoutingEngine::AddDestination(std::span<const AreaPiece> area)
+{
+    if(area.empty()) {
+        throw SimulationError("An area destination needs at least one piece.");
+    }
+    std::vector<Point3D> anchors{};
+    anchors.reserve(area.size());
+    for(const auto& piece : area) {
+        anchors.push_back(_geometry.anchor_of(piece).position_3d());
+    }
+    return add(std::move(anchors));
+}
+
+bool SurfaceMeshShortestPathRoutingEngine::HasDestination(DestinationId id) const
+{
+    return id.IsValid() && id.value < _destinations.size();
+}
+
+bool SurfaceMeshShortestPathRoutingEngine::IsValidLocation(const Point3D& loc) const
 {
     return _geometry.face_below(loc).face != SurfaceMesh::null_face();
 }
@@ -37,22 +73,23 @@ SurfaceMeshShortestPathRoutingEngine::on_surface(const Point3D& p, const char* w
 }
 
 SurfaceMeshShortestPathRoutingEngine::ShortestPath&
-SurfaceMeshShortestPathRoutingEngine::tree_for(const RoutingTarget& target)
+SurfaceMeshShortestPathRoutingEngine::tree_for(DestinationId target)
 {
-    auto it = _cache.find(target);
-    if(it == _cache.end()) {
-        const auto below = on_surface(target, "target");
-        auto shortest_path = std::make_unique<ShortestPath>(_geometry.mesh());
-        const auto to_loc = shortest_path->locate(below.point, _geometry.aabb_tree());
-        shortest_path->add_source_point(to_loc);
-        shortest_path->build_sequence_tree();
-        it = _cache.emplace(target, std::move(shortest_path)).first;
+    ThrowIfUnknown(target);
+    auto& dest = _destinations[target.value];
+    if(!dest.tree) {
+        auto tree = std::make_unique<ShortestPath>(_geometry.mesh());
+        for(const auto& source : dest.sources) {
+            tree->add_source_point(tree->locate(source, _geometry.aabb_tree()));
+        }
+        tree->build_sequence_tree();
+        dest.tree = std::move(tree);
     }
-    return *it->second;
+    return *dest.tree;
 }
 
 SurfaceMeshShortestPathRoutingEngine::Way
-SurfaceMeshShortestPathRoutingEngine::trace_way(const Point3D& source, const RoutingTarget& target)
+SurfaceMeshShortestPathRoutingEngine::trace_way(const Point3D& source, DestinationId target)
 {
     const auto from_below = on_surface(source, "source");
     auto& tree = tree_for(target);
@@ -141,9 +178,8 @@ Point3D SurfaceMeshShortestPathRoutingEngine::held_off_the_wall(
     return located ? located->position_3d() : Point3D{moved.x, moved.y, corner.z()};
 }
 
-std::vector<Point3D> SurfaceMeshShortestPathRoutingEngine::GetShortestPath(
-    const Point3D& source,
-    const RoutingTarget& target)
+std::vector<Point3D>
+SurfaceMeshShortestPathRoutingEngine::GetShortestPath(const Point3D& source, DestinationId target)
 {
     const auto way = trace_way(source, target);
 
@@ -159,7 +195,7 @@ std::vector<Point3D> SurfaceMeshShortestPathRoutingEngine::GetShortestPath(
 
 Point SurfaceMeshShortestPathRoutingEngine::next_waypoint(
     const Point3D& source,
-    const RoutingTarget& target)
+    DestinationId target)
 {
     const Point here{source.x(), source.y()};
     // CGAL sets a point wherever the way crosses a triangle edge.
@@ -173,17 +209,25 @@ Point SurfaceMeshShortestPathRoutingEngine::next_waypoint(
     return here;
 }
 
-Point SurfaceMeshShortestPathRoutingEngine::ComputeWaypoint(
-    const Location& from,
-    const Location& to)
+Point SurfaceMeshShortestPathRoutingEngine::ComputeWaypoint(const Location& from, DestinationId to)
 {
-    const Point next = next_waypoint(from.position_3d(), to.position_3d());
-    return next == from.xy() ? to.xy() : next;
+    const Point next = next_waypoint(from.position_3d(), to);
+    if(next != from.xy()) {
+        return next;
+    }
+    // Nothing left to walk: already there. Head for the nearest source itself.
+    const auto& sources = _destinations[to.value].sources;
+    const auto nearest = std::min_element(
+        sources.begin(), sources.end(), [&from](const Point3D& a, const Point3D& b) {
+            return CGAL::squared_distance(a, from.position_3d()) <
+                   CGAL::squared_distance(b, from.position_3d());
+        });
+    return Point{nearest->x(), nearest->y()};
 }
 
 Point SurfaceMeshShortestPathRoutingEngine::GetOrientation(
     const Point3D& source,
-    const RoutingTarget& target)
+    DestinationId target)
 {
     const Point here{source.x(), source.y()};
     // Zero when the way heads for where it already is: nowhere left to go.

@@ -2,6 +2,7 @@
 #include "Simulation.hpp"
 
 #include "GenericAgent.hpp"
+#include "HybridRoutingEngine.hpp"
 #include "IteratorPair.hpp"
 #include "Journey.hpp"
 #include "OperationalModel.hpp"
@@ -62,7 +63,7 @@ Simulation::Simulation(
     : _clock(dT)
     , _operationalDecisionSystem(std::move(operationalModel))
     , _geometry(std::move(geometry))
-    , _routingEngine(std::make_unique<SurfaceMeshShortestPathRoutingEngine>(*_geometry))
+    , _routingEngine(std::make_unique<HybridRoutingEngine>(*_geometry))
 {
 }
 
@@ -205,7 +206,7 @@ BaseStage::ID Simulation::AddStage(const StageDescription stageDescription, doub
     ThrowIfIterating("AddStage");
     JPS_SCOPED_TIMER_AND_TRACE(_timer, "Add Stage", Detailed);
     return _stageManager.AddStage(
-        stageDescription, _removedAgentsInLastIteration, *_geometry, z_hint);
+        stageDescription, _removedAgentsInLastIteration, *_geometry, *_routingEngine, z_hint);
 }
 
 GenericAgent::ID Simulation::AddAgent(
@@ -269,12 +270,12 @@ void Simulation::SetAgentTarget(GenericAgent::ID id, Point target)
     if(!located) {
         throw SimulationError("Point {} is outside of accessible area", target);
     }
-    agent.finalTarget = *located;
+    agent.finalTarget = {_routingEngine->AddDestination(*located), *located};
 }
 
 void Simulation::SetAgentTarget(GenericAgent::ID id, const Location& target)
 {
-    Agent(id).finalTarget = target;
+    Agent(id).finalTarget = {_routingEngine->AddDestination(target), target};
 }
 
 void Simulation::MarkAgentForRemoval(GenericAgent::ID id)

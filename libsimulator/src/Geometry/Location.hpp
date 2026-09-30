@@ -58,3 +58,8 @@ private:
     SurfaceMesh::Face_index _face; // cache; always valid (move throws before invalidating)
     double _z; // cache
 };
+
+struct AreaPiece {
+    PolyWithHoles polygon; // clipped to one region's footprint
+    std::size_t region;
+};

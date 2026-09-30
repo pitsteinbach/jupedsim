@@ -82,18 +82,18 @@ const std::vector<GenericAgent::ID>& NotifiableWaitingSetProxy::Waiting() const
 ////////////////////////////////////////////////////////////////////////////////
 /// Waypoint
 ////////////////////////////////////////////////////////////////////////////////
-Waypoint::Waypoint(Location position_, double distance_) : position(position_), distance(distance_)
+Waypoint::Waypoint(StageTarget target_, double distance_) : target(target_), distance(distance_)
 {
 }
 
 bool Waypoint::IsCompleted(const GenericAgent& agent)
 {
-    return agent.location.distance_to(position) <= distance;
+    return agent.location.distance_to(target.anchor) <= distance;
 }
 
-Location Waypoint::Target(const GenericAgent&)
+StageTarget Waypoint::Target(const GenericAgent&)
 {
-    return position;
+    return target;
 }
 
 StageProxy Waypoint::Proxy(Simulation* simulation)
@@ -104,27 +104,50 @@ StageProxy Waypoint::Proxy(Simulation* simulation)
 ////////////////////////////////////////////////////////////////////////////////
 /// Exit
 ////////////////////////////////////////////////////////////////////////////////
-Exit::Exit(Polygon area_, Location centroid_, std::vector<GenericAgent::ID>& toRemove_)
-    : area(std::move(area_)), centroid(centroid_), toRemove(toRemove_)
+Exit::Exit(
+    std::vector<AreaPiece> areas_,
+    StageTarget target_,
+    std::vector<GenericAgent::ID>& toRemove_)
+    : areas(std::move(areas_)), target(target_), toRemove(toRemove_)
 {
-    if(!area.IsConvex()) {
-        throw SimulationError("Exit areas need to be bounded by convex polygons.");
+    if(areas.empty()) {
+        throw SimulationError("Exit area does not cover any walkable area.");
     }
 }
 
+namespace
+{
+/// Inside or on the boundary of @p area, holes excluded.
+bool covers(const PolyWithHoles& area, Point p)
+{
+    const Point2D q{p.x, p.y};
+    if(area.outer_boundary().bounded_side(q) == CGAL::ON_UNBOUNDED_SIDE) {
+        return false;
+    }
+    return std::none_of(area.holes_begin(), area.holes_end(), [&q](const Poly& hole) {
+        return hole.bounded_side(q) == CGAL::ON_BOUNDED_SIDE;
+    });
+}
+} // namespace
+
 bool Exit::IsCompleted(const GenericAgent& agent)
 {
+    // Pieces lie in one region each, and a region never overlaps itself in plan: the region
+    // check is what tells the exit's floor from the ones above and below it.
     const bool hasReachedExit =
-        area.IsInside(agent.location.xy()) && agent.location.can_walk_straight_to(centroid);
+        std::any_of(areas.begin(), areas.end(), [&agent](const AreaPiece& piece) {
+            return piece.region == agent.location.region() &&
+                   covers(piece.polygon, agent.location.xy());
+        });
     if(hasReachedExit) {
         toRemove.push_back(agent.id);
     }
     return hasReachedExit;
 }
 
-Location Exit::Target(const GenericAgent&)
+StageTarget Exit::Target(const GenericAgent&)
 {
-    return centroid;
+    return target;
 }
 
 StageProxy Exit::Proxy(Simulation* simulation)
@@ -135,7 +158,8 @@ StageProxy Exit::Proxy(Simulation* simulation)
 ////////////////////////////////////////////////////////////////////////////////
 /// NotifiableWaitingSet
 ////////////////////////////////////////////////////////////////////////////////
-NotifiableWaitingSet::NotifiableWaitingSet(std::vector<Location> slots_) : slots(std::move(slots_))
+NotifiableWaitingSet::NotifiableWaitingSet(std::vector<StageTarget> slots_)
+    : slots(std::move(slots_))
 {
     occupants.reserve(slots.size());
 }
@@ -149,10 +173,10 @@ bool NotifiableWaitingSet::IsCompleted(const GenericAgent& agent)
     if(find_iter != std::end(occupants)) {
         return true;
     }
-    return agent.location.distance_to(slots[0]) <= 1;
+    return agent.location.distance_to(slots[0].anchor) <= 1;
 }
 
-Location NotifiableWaitingSet::Target(const GenericAgent& agent)
+StageTarget NotifiableWaitingSet::Target(const GenericAgent& agent)
 {
     if(state == WaitingSetState::Inactive) {
         return slots[0];
@@ -206,7 +230,7 @@ void NotifiableWaitingSet::Update(const EnvironmentQuery& envQuery)
     }
 
     for(size_t index = count_occupants; index < slots.size(); ++index) {
-        const auto& slot = slots[index];
+        const auto& slot = slots[index].anchor;
         auto candidates = envQuery.AgentsInRange(slot.xy(), 2, [&](const GenericAgent& candidate) {
             return envQuery.NoGeometryBetween(slot, candidate.location);
         });
@@ -236,7 +260,7 @@ void NotifiableWaitingSet::Update(const EnvironmentQuery& envQuery)
 ////////////////////////////////////////////////////////////////////////////////
 /// NotifiablQueue
 ////////////////////////////////////////////////////////////////////////////////
-NotifiableQueue::NotifiableQueue(std::vector<Location> slots_) : slots(std::move(slots_))
+NotifiableQueue::NotifiableQueue(std::vector<StageTarget> slots_) : slots(std::move(slots_))
 {
 }
 
@@ -249,7 +273,7 @@ bool NotifiableQueue::IsCompleted(const GenericAgent& agent)
     return completed;
 }
 
-Location NotifiableQueue::Target(const GenericAgent& agent)
+StageTarget NotifiableQueue::Target(const GenericAgent& agent)
 {
 
     if(const auto index_opt = IndexInContainer(occupants, agent.id); index_opt) {
@@ -289,7 +313,7 @@ void NotifiableQueue::Update(const EnvironmentQuery& envQuery)
     }
 
     for(size_t index = count_occupants; index < slots.size(); ++index) {
-        const auto& slot = slots[index];
+        const auto& slot = slots[index].anchor;
         auto candidates = envQuery.AgentsInRange(slot.xy(), 2, [&](const GenericAgent& candidate) {
             return envQuery.NoGeometryBetween(slot, candidate.location);
         });
@@ -318,7 +342,7 @@ void NotifiableQueue::Update(const EnvironmentQuery& envQuery)
 ////////////////////////////////////////////////////////////////////////////////
 /// DirectSteering
 ////////////////////////////////////////////////////////////////////////////////
-Location DirectSteering::Target(const GenericAgent& agent)
+StageTarget DirectSteering::Target(const GenericAgent& agent)
 {
     return agent.finalTarget;
 }

@@ -3,12 +3,14 @@
 
 #include "GenericAgent.hpp"
 #include "Geometry/Geometry.hpp"
+#include "RoutingEngine.hpp"
 #include "SimulationError.hpp"
 #include "Stage.hpp"
 #include "StageDescription.hpp"
 #include "Visitor.hpp"
 
 #include <memory>
+#include <span>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -28,18 +30,31 @@ locate_stage_point(const Geometry& geometry, Point point, std::string_view what,
     return *location;
 }
 
-inline std::vector<Location> locate_slots(
+/// Locate @p point and register it with @p routing.
+inline StageTarget point_target(
     const Geometry& geometry,
+    RoutingEngine& routing,
+    Point point,
+    std::string_view what,
+    double z_hint)
+{
+    const auto location = locate_stage_point(geometry, point, what, z_hint);
+    return {routing.AddDestination(location), location};
+}
+
+inline std::vector<StageTarget> slot_targets(
+    const Geometry& geometry,
+    RoutingEngine& routing,
     const std::vector<Point>& slots,
     std::string_view what,
     double z_hint)
 {
-    std::vector<Location> located{};
-    located.reserve(slots.size());
+    std::vector<StageTarget> targets{};
+    targets.reserve(slots.size());
     for(const auto& slot : slots) {
-        located.push_back(locate_stage_point(geometry, slot, what, z_hint));
+        targets.push_back(point_target(geometry, routing, slot, what, z_hint));
     }
-    return located;
+    return targets;
 }
 } // namespace detail
 
@@ -60,31 +75,34 @@ public:
         const StageDescription stageDescription,
         std::vector<GenericAgent::ID>& removedAgentsInLastIteration,
         const Geometry& geometry,
+        RoutingEngine& routing,
         double z_hint)
     {
         std::unique_ptr<BaseStage> stage = std::visit(
             overloaded{
-                [&geometry, z_hint](const WaypointDescription& d) -> std::unique_ptr<BaseStage> {
+                [&](const WaypointDescription& d) -> std::unique_ptr<BaseStage> {
                     return std::make_unique<Waypoint>(
-                        detail::locate_stage_point(geometry, d.position, "WayPoint", z_hint),
+                        detail::point_target(geometry, routing, d.position, "WayPoint", z_hint),
                         d.distance);
                 },
-                [&removedAgentsInLastIteration, &geometry, z_hint](
-                    const ExitDescription& d) -> std::unique_ptr<BaseStage> {
+                [&](const ExitDescription& d) -> std::unique_ptr<BaseStage> {
+                    auto pieces = geometry.split_into_region_pieces(d.polygon, z_hint);
+                    if(pieces.empty()) {
+                        throw SimulationError("Exit does not cover any walkable area.");
+                    }
+                    const StageTarget target{
+                        routing.AddDestination(std::span<const AreaPiece>{pieces}),
+                        geometry.anchor_of(pieces.front())};
                     return std::make_unique<Exit>(
-                        d.polygon,
-                        detail::locate_stage_point(geometry, d.polygon.Centroid(), "Exit", z_hint),
-                        removedAgentsInLastIteration);
+                        std::move(pieces), target, removedAgentsInLastIteration);
                 },
-                [&geometry,
-                 z_hint](const NotifiableWaitingSetDescription& d) -> std::unique_ptr<BaseStage> {
-                    return std::make_unique<NotifiableWaitingSet>(detail::locate_slots(
-                        geometry, d.slots, "NotifiableWaitingSet point", z_hint));
+                [&](const NotifiableWaitingSetDescription& d) -> std::unique_ptr<BaseStage> {
+                    return std::make_unique<NotifiableWaitingSet>(detail::slot_targets(
+                        geometry, routing, d.slots, "NotifiableWaitingSet point", z_hint));
                 },
-                [&geometry,
-                 z_hint](const NotifiableQueueDescription& d) -> std::unique_ptr<BaseStage> {
-                    return std::make_unique<NotifiableQueue>(
-                        detail::locate_slots(geometry, d.slots, "NotifiableQueue point", z_hint));
+                [&](const NotifiableQueueDescription& d) -> std::unique_ptr<BaseStage> {
+                    return std::make_unique<NotifiableQueue>(detail::slot_targets(
+                        geometry, routing, d.slots, "NotifiableQueue point", z_hint));
                 },
                 [](const DirectSteeringDescription&) -> std::unique_ptr<BaseStage> {
                     return std::make_unique<DirectSteering>();

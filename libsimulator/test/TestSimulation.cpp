@@ -101,11 +101,11 @@ TEST(MeshBuiltSimulation, AStageIsPutOnTheStoreyItsHintNames)
     sim->Iterate();
     // The waypoint of the journey the agent is on, so its target says which storey the stage
     // was put on.
-    EXPECT_NEAR(sim->Agent(id).finalTarget.z(), 3.0, 1e-9);
+    EXPECT_NEAR(sim->Agent(id).finalTarget.anchor.z(), 3.0, 1e-9);
 
     sim->SwitchAgentJourney(id, down_journey, down_stage);
     sim->Iterate();
-    EXPECT_EQ(sim->Agent(id).finalTarget.z(), 0.0);
+    EXPECT_EQ(sim->Agent(id).finalTarget.anchor.z(), 0.0);
 }
 
 TEST(MeshBuiltSimulation, ATargetWrittenFromOutsideLandsOnTheAgentsOwnStorey)
@@ -117,11 +117,11 @@ TEST(MeshBuiltSimulation, ATargetWrittenFromOutsideLandsOnTheAgentsOwnStorey)
     // Only (x, y) is given, and two storeys carry it. It has to mean the one the agent is on --
     // anything else routes it through the wrong floor.
     sim->SetAgentTarget(upstairs, Point{2, 6});
-    EXPECT_NEAR(sim->Agent(upstairs).finalTarget.z(), 3.0, 1e-9);
+    EXPECT_NEAR(sim->Agent(upstairs).finalTarget.anchor.z(), 3.0, 1e-9);
 
     const auto downstairs = sim->AddAgent(journey, stage, Point{5, 6}, State{}, 0.0);
     sim->SetAgentTarget(downstairs, Point{2, 6});
-    EXPECT_EQ(sim->Agent(downstairs).finalTarget.z(), 0.0);
+    EXPECT_EQ(sim->Agent(downstairs).finalTarget.anchor.z(), 0.0);
 }
 
 TEST(MeshBuiltSimulation, HasNoPolygonToHandOut)
