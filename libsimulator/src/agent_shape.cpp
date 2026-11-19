@@ -11,6 +11,9 @@ double perimeter_distance(
 {
     const auto [centre_distance, first_to_second] =
         (centre_second - centre_first).norm_and_normalized();
-    return centre_distance - first.centre_to_perimeter(first_to_second, orientation_first) -
-           second.centre_to_perimeter(-first_to_second, orientation_second);
+    // Summed first, as models did with radii, so circles reproduce their trajectories bit for bit.
+    const double contact_distance =
+        first.centre_to_perimeter(first_to_second, orientation_first) +
+        second.centre_to_perimeter(-first_to_second, orientation_second);
+    return centre_distance - contact_distance;
 }

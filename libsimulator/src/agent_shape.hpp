@@ -3,6 +3,10 @@
 
 #include "kernel.hpp"
 
+#include <fmt/core.h>
+
+#include <variant>
+
 /// The footprint an agent occupies, described around its centre.
 ///
 /// Operational models use it to measure gaps between agents perimeter to perimeter instead of
@@ -36,6 +40,14 @@ public:
     double centre_to_perimeter(const Vector&, const Vector&) const override { return _radius; }
 };
 
+/// Every concrete shape, held by value so agent states stay copyable.
+using AnyAgentShape = std::variant<CircleShape>;
+
+inline const AgentShape& as_agent_shape(const AnyAgentShape& shape)
+{
+    return std::visit([](const AgentShape& s) -> const AgentShape& { return s; }, shape);
+}
+
 /// Gap between the perimeters of two agents along the line connecting their centres.
 ///
 /// @return centre distance minus both centre-to-perimeter distances; negative if the shapes overlap
@@ -46,3 +58,26 @@ double perimeter_distance(
     const AgentShape& second,
     const Point& centre_second,
     const Vector& orientation_second);
+
+template <>
+struct fmt::formatter<CircleShape> {
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const CircleShape& c, FormatContext& ctx) const
+    {
+        return fmt::format_to(ctx.out(), "Circle[radius={}]", c.radius());
+    }
+};
+
+template <>
+struct fmt::formatter<AnyAgentShape> {
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const AnyAgentShape& shape, FormatContext& ctx) const
+    {
+        return std::visit(
+            [&ctx](const auto& s) { return fmt::format_to(ctx.out(), "{}", s); }, shape);
+    }
+};

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "collision_free_speed_model.hpp"
 
+#include "agent_shape.hpp"
 #include "agent_view.hpp"
 #include "generic_agent.hpp"
 #include "kernel.hpp"
@@ -8,6 +9,7 @@
 #include "operational_model_state.hpp"
 #include "operational_model_type.hpp"
 #include "simulation_error.hpp"
+#include "visitor.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -19,6 +21,21 @@ namespace
 /// How far to ask for walls. The repulsion decays with `range_geometry_repulsion` (0.02 m by
 /// default), so a wall this far off contributes "nothing".
 constexpr double wall_search_radius = 4.0;
+
+/// Perimeter gap to a neighbor at @p relative_position from the agent.
+double gap_to(
+    const CollisionFreeSpeedModelState& agent,
+    const CollisionFreeSpeedModelState& neighbor,
+    const Vector& relative_position)
+{
+    return perimeter_distance(
+        as_agent_shape(agent.shape),
+        Point{},
+        agent.orientation,
+        as_agent_shape(neighbor.shape),
+        at_offset(relative_position),
+        neighbor.orientation);
+}
 } // namespace
 
 CollisionFreeSpeedModel::CollisionFreeSpeedModel(
@@ -79,10 +96,14 @@ void CollisionFreeSpeedModel::check_model_constraint(
 {
     const auto& current_state = std::get<State>(agent.state);
 
-    const auto r = current_state.radius;
-    constexpr double r_min = 0.;
     constexpr double r_max = 2.;
-    validate_constraint(r, r_min, r_max, "radius", true);
+    std::visit(
+        Overloaded{[](const CircleShape& circle) {
+            constexpr double r_min = 0.;
+            validate_constraint(circle.radius(), r_min, r_max, "radius", true);
+        }},
+        current_state.shape);
+    const auto& shape = as_agent_shape(current_state.shape);
 
     const auto v0 = current_state.v0;
     constexpr double v0_min = 0.;
@@ -97,9 +118,8 @@ void CollisionFreeSpeedModel::check_model_constraint(
     const auto neighbors = view.other_agents_in_range(2.0);
     for(const auto& neighbor : neighbors) {
         const auto& neighbor_state = std::get<State>(*neighbor.state);
-        const auto contanctd_dist = r + neighbor_state.radius;
         const auto distance = neighbor.relative_position.norm();
-        if(contanctd_dist >= distance) {
+        if(gap_to(current_state, neighbor_state, neighbor.relative_position) <= 0) {
             throw SimulationError(
                 "Model constraint violation: Agent {} too close to agent {}: distance {}",
                 agent.location.xy(),
@@ -108,12 +128,15 @@ void CollisionFreeSpeedModel::check_model_constraint(
         }
     }
 
-    if(!view.walls_in_range(r).empty()) {
-        throw SimulationError(
-            "Model constraint violation: Agent at {} too close to geometry boundaries, distance "
-            "< {}",
-            agent.location.xy(),
-            r);
+    for(const auto& wall : view.walls_in_range(r_max)) {
+        const auto reach = shape.centre_to_perimeter(-wall.normal, current_state.orientation);
+        if(wall.distance <= reach) {
+            throw SimulationError(
+                "Model constraint violation: Agent at {} too close to geometry boundaries, "
+                "distance < {}",
+                agent.location.xy(),
+                reach);
+        }
     }
 }
 
@@ -137,30 +160,34 @@ double CollisionFreeSpeedModel::get_spacing(
         return std::numeric_limits<double>::max();
     }
 
+    // Half-widths across the walking direction; exact for circles, an approximation otherwise.
     const auto left = direction.rotate90_deg();
-    const auto l = current_state.radius + other.radius;
-    bool in_corridor = std::abs(left.scalar_product(distp12)) <= l;
+    const auto half_width =
+        as_agent_shape(current_state.shape).centre_to_perimeter(left, current_state.orientation) +
+        as_agent_shape(other.shape).centre_to_perimeter(left, other.orientation);
+    bool in_corridor = std::abs(left.scalar_product(distp12)) <= half_width;
     if(!in_corridor) {
         return std::numeric_limits<double>::max();
     }
-    return distp12.norm() - l;
+    return gap_to(current_state, other, distp12);
 }
 Vector CollisionFreeSpeedModel::neighbor_repulsion(
     const State& current_state,
     const NeighborView& neighbor) const
 {
     const auto& other = std::get<State>(*neighbor.state);
-    const auto [distance, direction] = neighbor.relative_position.norm_and_normalized();
-    const auto l = current_state.radius + other.radius;
-    return direction * -(this->_strength_neighbor_repulsion *
-                         exp((l - distance) / this->_range_neighbor_repulsion));
+    const auto direction = neighbor.relative_position.normalized();
+    const auto gap = gap_to(current_state, other, neighbor.relative_position);
+    return direction *
+           -(this->_strength_neighbor_repulsion * exp(-gap / this->_range_neighbor_repulsion));
 }
 
 Vector CollisionFreeSpeedModel::boundary_repulsion(
     const State& current_state,
     const WallView& boundary) const
 {
-    const auto l = current_state.radius;
+    const auto l = as_agent_shape(current_state.shape)
+                       .centre_to_perimeter(-boundary.normal, current_state.orientation);
     const auto r_iw =
         -_strength_geometry_repulsion * exp((l - boundary.distance) / _range_geometry_repulsion);
     return -boundary.normal * r_iw; // The repulsion points away from the agent

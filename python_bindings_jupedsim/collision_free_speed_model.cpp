@@ -84,15 +84,22 @@ void init_collision_free_speed_model(py::module_& m)
                     .orientation = orientation,
                     .time_gap = time_gap,
                     .v0 = desired_speed,
-                    .radius = radius};
+                    .shape = CircleShape{radius}};
             }),
             py::kw_only(),
             py::arg("orientation") = d.orientation,
             py::arg("time_gap") = d.time_gap,
             py::arg("desired_speed") = d.v0,
-            py::arg("radius") = d.radius)
+            py::arg("radius") = std::get<CircleShape>(d.shape).radius())
         .def_readwrite("orientation", &CollisionFreeSpeedModel::State::orientation)
         .def_readwrite("time_gap", &CollisionFreeSpeedModel::State::time_gap)
         .def_readwrite("desired_speed", &CollisionFreeSpeedModel::State::v0)
-        .def_readwrite("radius", &CollisionFreeSpeedModel::State::radius);
+        .def_property(
+            "radius",
+            [](const CollisionFreeSpeedModel::State& s) {
+                return std::get<CircleShape>(s.shape).radius();
+            },
+            [](CollisionFreeSpeedModel::State& s, double radius) {
+                s.shape = CircleShape{radius};
+            });
 }

@@ -27,7 +27,7 @@ using State = CollisionFreeSpeedModel::State;
 GenericAgent make_agent(const Geometry& geo, Point pos, double radius = 0.2, double z = 0.0)
 {
     State s{};
-    s.radius = radius;
+    s.shape = CircleShape{radius};
     return GenericAgent(
         GenericAgent::ID::invalid,
         jps::UniqueID<Journey>::invalid,
