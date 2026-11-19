@@ -9,6 +9,8 @@ target_sources(simulator PRIVATE
     src/aabb.cpp
     src/aabb.hpp
     src/agent_removal_system.hpp
+    src/agent_shape.cpp
+    src/agent_shape.hpp
     src/agent_view.hpp
     src/cfg_cgal.hpp
     src/ellipse.cpp
@@ -109,6 +111,7 @@ if (BUILD_TESTS)
     add_executable(libsimulator-tests
         test/geometry_fixtures.hpp
         test/test_aabb.cpp
+        test/test_agent_shape.cpp
         test/test_agent_view.cpp
         test/test_basic_primitive_tests.cpp
         test/test_boundary_index.cpp
