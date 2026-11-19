@@ -40,8 +40,28 @@ public:
     double centre_to_perimeter(const Vector&, const Vector&) const override { return _radius; }
 };
 
+/// Ellipse with one semi-axis along the orientation and one across it.
+class EllipseShape : public AgentShape
+{
+    double _semi_axis_along;
+    double _semi_axis_across;
+
+public:
+    EllipseShape(double semi_axis_along, double semi_axis_across)
+        : _semi_axis_along(semi_axis_along), _semi_axis_across(semi_axis_across)
+    {
+    }
+
+    double semi_axis_along() const { return _semi_axis_along; }
+    double semi_axis_across() const { return _semi_axis_across; }
+
+    /// Polar radius of the ellipse at the angle between @p direction and @p orientation. Without
+    /// either, the ellipse could face anywhere, so it returns the larger semi-axis.
+    double centre_to_perimeter(const Vector& direction, const Vector& orientation) const override;
+};
+
 /// Every concrete shape, held by value so agent states stay copyable.
-using AnyAgentShape = std::variant<CircleShape>;
+using AnyAgentShape = std::variant<CircleShape, EllipseShape>;
 
 inline const AgentShape& as_agent_shape(const AnyAgentShape& shape)
 {
@@ -67,6 +87,21 @@ struct fmt::formatter<CircleShape> {
     auto format(const CircleShape& c, FormatContext& ctx) const
     {
         return fmt::format_to(ctx.out(), "Circle[radius={}]", c.radius());
+    }
+};
+
+template <>
+struct fmt::formatter<EllipseShape> {
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const EllipseShape& e, FormatContext& ctx) const
+    {
+        return fmt::format_to(
+            ctx.out(),
+            "Ellipse[semi_axis_along={}, semi_axis_across={}]",
+            e.semi_axis_along(),
+            e.semi_axis_across());
     }
 };
 

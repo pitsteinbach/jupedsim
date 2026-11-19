@@ -98,10 +98,18 @@ void CollisionFreeSpeedModel::check_model_constraint(
 
     constexpr double r_max = 2.;
     std::visit(
-        Overloaded{[](const CircleShape& circle) {
-            constexpr double r_min = 0.;
-            validate_constraint(circle.radius(), r_min, r_max, "radius", true);
-        }},
+        Overloaded{
+            [](const CircleShape& circle) {
+                constexpr double r_min = 0.;
+                validate_constraint(circle.radius(), r_min, r_max, "radius", true);
+            },
+            [](const EllipseShape& ellipse) {
+                constexpr double axis_min = 0.;
+                validate_constraint(
+                    ellipse.semi_axis_along(), axis_min, r_max, "semi_axis_along", true);
+                validate_constraint(
+                    ellipse.semi_axis_across(), axis_min, r_max, "semi_axis_across", true);
+            }},
         current_state.shape);
     const auto& shape = as_agent_shape(current_state.shape);
 
